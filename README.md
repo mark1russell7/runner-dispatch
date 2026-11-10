@@ -2,7 +2,7 @@
 
 One-job CI runners for trusted jobs. The dispatcher gives a waiting job of GitHub Actions a new machine, for that job only. It destroys the machine after the job.
 
-This repository is new. Its first package is not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
+The first package has the records and the trust rules. The sources, the providers and the service are not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
 
 ## The problem
 
@@ -29,13 +29,25 @@ Each layer stops a job that is not trusted, and no layer needs a different layer
 4. Each job has its own machine, with no credential and no route to a private network.
 5. One switch stops the dispatcher and destroys each machine.
 
-## The packages
+## The credential
 
-This package is the plan. It does not exist yet.
+The dispatcher asks GitHub for the one-job configuration of each runner. The permission of that request decides what a stolen credential can do. The permission pages of the GitHub REST documentation give these rules for a fine-grained token and for a GitHub App:
+
+| Where the runner registers | The permissions of the dispatcher | What the credential can also do |
+| --- | --- | --- |
+| A repository | `Administration` write and `Actions` read on each served repository | Change each setting of the repository, and delete it. |
+| An organization | The organization permission "Self-hosted runners" write, and `Actions` read on the served repositories | Make and remove runners. It cannot change a repository. |
+
+- Thus an organization gives the smaller credential. There, the dispatcher can be a GitHub App with only these two permissions.
+- For a repository of a personal account, give the credential only the served repositories.
+- A machine of a job does not get the credential. It gets only the one-job configuration of its runner.
+- The source supports the two places (item R4 of the roadmap).
+
+## The packages
 
 | Package | What it has |
 | --- | --- |
-| `@mark1russell7/runner-dispatch` | The records of a run, a job and a machine, the policy, the sources, the providers and the dispatcher service. |
+| [`@mark1russell7/runner-dispatch`](packages/runner-dispatch) | The records of a run, a job and a machine, the trust rules as data, and the policy. The sources, the providers and the dispatcher service come next. It is not on npm yet. |
 
 Other packages give the general parts:
 
