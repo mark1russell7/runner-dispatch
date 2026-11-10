@@ -58,8 +58,14 @@ const EVENT = /^[a-z][a-z_]*$/;
 const ACTOR = /^[A-Za-z0-9][A-Za-z0-9_-]*(?:\[bot\])?$/;
 const SHOWN_LENGTH = 120;
 
-function isObject(value: unknown): value is Record<string, unknown> {
+/** This function tells if a value is an object that is not a list. The other modules of the package use it. */
+export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** This function tells if a value is the name of a repository, as `owner/name`. The other modules of the package use it. */
+export function isRepositoryName(value: unknown): value is string {
+  return typeof value === "string" && REPOSITORY.test(value);
 }
 
 function isName(value: unknown): value is string {
@@ -75,8 +81,9 @@ function entries(value: unknown): readonly unknown[] {
  * This function shows a value of a record in a sentence.
  * It keeps the text short, and it writes each character that is not printable ASCII as an escape.
  * Thus a name from outside cannot change the lines of a log.
+ * The other modules of the package use it.
  */
-function show(value: unknown): string {
+export function show(value: unknown): string {
   if (typeof value === "string") {
     return JSON.stringify(value.slice(0, SHOWN_LENGTH)).replace(
       /[^ -~]/g,

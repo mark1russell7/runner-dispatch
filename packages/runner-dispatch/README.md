@@ -1,8 +1,8 @@
 # @mark1russell7/runner-dispatch
 
-The records and the trust rules of a dispatcher of one-job CI runners. The package is not on npm yet.
+The records, the trust rules and the check on the machine of a dispatcher of one-job CI runners. The package is not on npm yet.
 
-A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It has no network code.
+A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has no network code.
 
 ## The records
 
@@ -88,12 +88,106 @@ The function gives the rules, or the list of the problems. It reports an unknown
 - A fork can write the same label. Thus the label is not a proof.
 - `sameRun(a, b)` compares the repository, the id and the try of two records. The check on the machine uses it to compare a job with its machine.
 
+## The check on the machine
+
+The dispatcher decides before it makes a machine. The machine decides again, before the first step of a job. The check on the machine does not use the decision of the dispatcher. Thus it stops a job that got the label of a trusted run.
+
+`checkJob(settings, environment, event)` tells if a job can start on a machine. A job passes only when all of these are true:
+
+1. The policy trusts the run of the job, with the record that the machine reads.
+2. The event file of the job is an object, and it names the repository of the job.
+3. The run of the job is the run that the machine serves.
+
+`readJobRun(environment, event)` reads the record of the run on the machine:
+
+| Field | Source |
+| --- | --- |
+| `repository` | The variable `GITHUB_REPOSITORY` |
+| `runId` | The variable `GITHUB_RUN_ID` |
+| `runAttempt` | The variable `GITHUB_RUN_ATTEMPT` |
+| `event` | The variable `GITHUB_EVENT_NAME` |
+| `actor` | The variable `GITHUB_ACTOR` |
+| `triggeringActor` | The variable `GITHUB_TRIGGERING_ACTOR` |
+| `headRepository` | The event file of the job |
+
+- For a pull request, the head repository is `pull_request.head.repo.full_name` of the event file.
+- An event file with the key `pull_request` is a pull request. An event with a name that starts with `pull_request` is a pull request too.
+- A pull request from a fork that no longer exists has no head repository. The check refuses it.
+- For each other event, the head repository is `repository.full_name` of the event file.
+- An id is a text of decimal digits with no zero at the start. Each other text gives 0, and the policy refuses the record.
+- The check does not expand a value. The author of a workflow writes some of the values.
+- The functions do not throw. A value with a bad shape gives a job that does not pass.
+
+### The settings of a machine
+
+The dispatcher writes one document of settings for each machine. `parseCheckSettings(value)` reads it:
+
+```json
+{
+  "format": "machine-check/1",
+  "rules": {
+    "format": "trust-rules/1",
+    "repositories": ["octo/app"],
+    "events": ["push", "pull_request", "workflow_dispatch"],
+    "actors": ["octo-owner"]
+  },
+  "run": { "repository": "octo/app", "runId": 12345678901, "runAttempt": 1 }
+}
+```
+
+The function gives the settings, or the list of the problems. The dispatcher uses it before it sends a document to a machine.
+
+### The job-started program
+
+The runner program starts one script before the first step of each job. The variable `ACTIONS_RUNNER_HOOK_JOB_STARTED` of the runner program names that script. On a machine of the dispatcher, the script starts the program `src/cli/job-started.ts` with one argument:
+
+```sh
+#!/bin/sh
+exec node /opt/runner-dispatch/packages/runner-dispatch/src/cli/job-started.ts /etc/runner-dispatch/check.json
+```
+
+The argument is the path of the settings file. The program reads the event file from the path in `GITHUB_EVENT_PATH`.
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | The job passed the check, and it starts. |
+| 1 | The check refused the job. The log has one line for each reason. |
+| 2 | The check cannot use its settings: no argument, a file that it cannot read, or a document that is not valid. |
+
+- The runner program fails the job for each code that is not 0. Thus the check fails closed.
+- The program takes the path of the settings only from its argument. No variable changes it.
+- The author of a job can read the log of the job. Thus the lines do not show the trust rules.
+- Each line starts with fixed words. A value from outside is in quotation marks, with an escape for each character that is not printable ASCII.
+- The program needs only Node.js 24 or later and the source files of this package. It has no dependency.
+- `jobStarted(args, environment, read)` is the program without its input and output.
+
+### The measured sequence of the runner program
+
+The documentation of GitHub does not state when the job-started script starts, or which variables it gets. A probe measured these facts for the runner program 2.338.2 on Linux:
+
+- The script is the second step of a job. It comes before each image pull, each container and each step of the job.
+- When the script fails, the runner program skips them and fails the job.
+- The key `env` of a workflow or of a job gives no variable to the script. Thus a job cannot change the input of the check.
+- A job cannot change which script the runner program starts.
+- The script gets the environment of the runner program. It gets no token of the job.
+
+No probe measured the runner program on Windows or on macOS. A new version of the runner program can change the sequence. Thus a probe with this program must pass for each new version (item R2 of the roadmap).
+
 ## The tests
 
-Property tests on `fast-check` hold the rules:
+Property tests on `fast-check` hold the rules of the policy:
 
 - A run from a fork is not trusted, for each value of the other fields.
 - The two refused events are not trusted, also when the rules list them.
 - The function agrees with a second statement of the rules.
 - A list that loses entries adds no trust.
 - A value of each type gives no trust and no error.
+
+Tests hold the check on the machine:
+
+- A pull request from a fork does not pass, for each value of the other fields.
+- The job of a different run does not pass.
+- The check passes no job that the policy of the dispatcher refuses.
+- The check agrees with a second statement, from the facts of a job.
+- Two machines with different rules write the same lines when the same rules refuse a job.
+- A test starts the program as a process, and it gets the exit codes 0, 1 and 2.

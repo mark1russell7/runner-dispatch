@@ -22,3 +22,16 @@ export {
   type TrustRules,
   type TrustRulesResult,
 } from "./policy.ts";
+export {
+  CHECK_SETTINGS_FORMAT,
+  checkJob,
+  parseCheckSettings,
+  readJobRun,
+  type CheckRefusal,
+  type CheckRule,
+  type CheckSettings,
+  type CheckSettingsResult,
+  type JobCheck,
+  type JobEnvironment,
+} from "./check.ts";
+export { jobStarted, type JobStartedResult } from "./job-started.ts";
