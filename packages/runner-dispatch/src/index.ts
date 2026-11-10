@@ -35,3 +35,26 @@ export {
   type JobEnvironment,
 } from "./check.ts";
 export { jobStarted, type JobStartedResult } from "./job-started.ts";
+export {
+  advance,
+  due,
+  longestLife,
+  MACHINE_ACTIONS,
+  MACHINE_EVENTS,
+  MACHINE_LIFECYCLE,
+  MACHINE_STATES,
+  MACHINE_TIME_MAX,
+  MACHINE_TIMES_FORMAT,
+  parseMachineTimes,
+  startLife,
+  waitOf,
+  type LongestLife,
+  type MachineAction,
+  type MachineEvent,
+  type MachineLife,
+  type MachineState,
+  type MachineStep,
+  type MachineTimes,
+  type MachineTimesResult,
+  type MachineWait,
+} from "./lifecycle.ts";

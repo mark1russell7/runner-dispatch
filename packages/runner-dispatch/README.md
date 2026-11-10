@@ -1,8 +1,8 @@
 # @mark1russell7/runner-dispatch
 
-The records, the trust rules and the check on the machine of a dispatcher of one-job CI runners. The package is not on npm yet.
+The records, the trust rules, the check on the machine and the life of a machine of a dispatcher of one-job CI runners. The package is not on npm yet.
 
-A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has no network code.
+A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has the life of a machine as a state machine. It has no network code.
 
 ## The records
 
@@ -163,7 +163,7 @@ The argument is the path of the settings file. The program reads the event file 
 - The program takes the path of the settings only from its argument. No variable changes it.
 - The author of a job can read the log of the job. Thus the lines do not show the trust rules.
 - Each line starts with fixed words. A value from outside is in quotation marks, with an escape for each character that is not printable ASCII.
-- The program needs only Node.js 24 or later and the source files of this package. It has no dependency.
+- The program needs only Node.js 24 or later and the source files of this package. It imports no package, and a test holds this.
 - `jobStarted(args, environment, read)` is the program without its input and output.
 
 ### The measured sequence of the runner program
@@ -189,6 +189,169 @@ Then two probes started this program as the script, on the same runner program. 
 
 No probe measured the runner program on Windows or on macOS. A new version of the runner program can change the sequence, or the folder of its Node.js. Thus these probes must pass for each new version of the runner program, and for each change of this program.
 
+## The life of a machine
+
+The dispatcher makes one machine for each job, and it destroys the machine after the job. `MACHINE_LIFECYCLE` is the life of one machine, as data. It is a document in the format `mark1russell7.machine/1` of [`@mark1russell7/algebra`](https://www.npmjs.com/package/@mark1russell7/algebra). The document is the specification: the functions of this package read it, and the dispatcher follows it.
+
+```mermaid
+stateDiagram-v2
+  [*] --> asked
+  asked --> made
+  made --> registered
+  registered --> busy
+  asked --> done
+  made --> done
+  registered --> done
+  busy --> done
+  done --> done
+  made --> destroyed
+  registered --> destroyed
+  busy --> destroyed
+  done --> destroyed
+  destroyed --> [*]
+```
+
+| State | Meaning |
+| --- | --- |
+| `asked` | The dispatcher asked the provider for the machine. |
+| `made` | The machine operates, and its runner is not connected to GitHub. |
+| `registered` | The runner of the machine is connected to GitHub, and it has no job. |
+| `busy` | The runner does its one job. |
+| `done` | The machine has no more work, and the dispatcher asks the provider to destroy it. |
+| `destroyed` | The provider tells that the machine is not there. |
+
+### The transitions
+
+| Transition | From | Event | To | Request |
+| --- | --- | --- | --- | --- |
+| `made` | `asked` | `provider.made` | `made` | |
+| `registered` | `made` | `runner.registered` | `registered` | |
+| `started` | `registered` | `job.started` | `busy` | |
+| `completed` | `busy` | `job.completed` | `done` | `provider.destroy` |
+| `failed` | `asked`, `made`, `registered`, `busy` | `provider.failed` | `done` | `provider.destroy` |
+| `no-job` | `asked`, `made`, `registered` | `job.none` | `done` | `provider.destroy` |
+| `stopped` | `asked`, `made`, `registered`, `busy` | `stop` | `done` | `provider.destroy` |
+| `make-late` | `asked` | `timer.make` | `done` | `provider.destroy` |
+| `register-late` | `made` | `timer.register` | `done` | `provider.destroy` |
+| `idle-late` | `registered` | `timer.idle` | `done` | `provider.destroy` |
+| `job-late` | `busy` | `timer.job` | `done` | `provider.destroy` |
+| `destroy-again` | `done` | `timer.destroy` | `done` | `provider.destroy` |
+| `lost` | `made`, `registered`, `busy` | `provider.destroyed` | `destroyed` | |
+| `destroyed` | `done` | `provider.destroyed` | `destroyed` | |
+
+- `provider.made`, `provider.failed` and `provider.destroyed` are reports of the provider.
+- `runner.registered`, `job.started`, `job.completed` and `job.none` are reports of GitHub.
+- `job.none` tells that the run has no job for this runner: each job ended, or another runner has it.
+- `stop` is the stop switch of the dispatcher.
+- The dispatcher asks the provider to destroy the machine at each transition into `done`.
+- A state ignores each event that is not in its rows.
+- No transition goes back, and only `destroyed` is final. Thus a life ends only in `destroyed`.
+- A machine goes to `destroyed` only when the provider tells that the machine is not there.
+
+### The timers
+
+Each state that is not final has one timer. The timer starts at the entry to the state, and each other event that leaves the state cancels it.
+
+| State | Timer | Wait | Event |
+| --- | --- | --- | --- |
+| `asked` | `make` | `make` | `timer.make` |
+| `made` | `register` | `register` | `timer.register` |
+| `registered` | `idle` | `idle` | `timer.idle` |
+| `busy` | `job` | `job` | `timer.job` |
+| `done` | `destroy` | `min(retry * pow(2, min(fired, 32)), retry_max)` | `timer.destroy` |
+
+- Before `done`, the firing of a timer sends the machine to `done`. Thus no machine stays in a working state.
+- In `done`, each firing asks the provider again. Each wait is two times the wait before it, to the longest wait.
+- The waits of `done` have no end. Thus the dispatcher does not forget a machine when the provider fails.
+- The dispatcher sees a firing at the first pass of its loop after the wait. Thus each timer can fire one pass late.
+
+### The times of a machine
+
+`parseMachineTimes(value)` reads a document of the times, for example from a JSON file. Each time is in seconds:
+
+```json
+{
+  "format": "machine-times/1",
+  "make": 300,
+  "register": 120,
+  "idle": 180,
+  "job": 21600,
+  "retry": 5,
+  "retryMax": 300,
+  "pass": 10
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `make` | The longest time for the provider to make a machine. |
+| `register` | The longest time for the runner of a machine to connect to GitHub. |
+| `idle` | The longest time that a connected runner waits for its job. |
+| `job` | The longest time of a job. |
+| `retry` | The first wait before the dispatcher asks the provider again to destroy a machine. |
+| `retryMax` | The longest wait before the dispatcher asks again. It is not less than `retry`. |
+| `pass` | The longest time between two passes of the loop of the dispatcher. |
+
+- The function gives the times, or the list of the problems.
+- Each time is a number above 0 and not above 31 536 000, which is 365 days. Thus each timer has an end.
+- The document has no default. The numbers of this example are not a recommendation: measure the times of your provider.
+
+### The functions
+
+```ts
+import { advance, due, longestLife, parseMachineTimes, startLife, waitOf } from "@mark1russell7/runner-dispatch";
+
+const parsed = parseMachineTimes(document); // The document of the example above.
+if (!parsed.ok) throw new Error(parsed.problems.join(" "));
+const times = parsed.times;
+
+// The dispatcher asks the provider for a machine at the time 0. Each time of a life is in milliseconds.
+let life = startLife(0);
+life = advance(life, "provider.made", 40_000)?.life ?? life;
+// life is { state: "made", at: 40_000, fired: 0 }.
+
+// At each pass of its loop, the dispatcher asks if the timer of the state fires.
+const event = due(life, 170_000, times);
+// event is "timer.register": the machine is in "made" for 130 s, and the time register is 120 s.
+const step = event === null ? null : advance(life, event, 170_000);
+// step.transition is "register-late", step.life.state is "done", and step.actions is ["provider.destroy"].
+
+waitOf("done", times, 3);
+// { timer: "destroy", fires: "timer.destroy", low: 40_000, high: 50_000 }: the fourth wait of the state done.
+
+longestLife(times);
+// { withJob: 22_240_000, withoutJob: 630_000 }
+```
+
+| Function | What it gives |
+| --- | --- |
+| `startLife(at)` | The life of a new machine, in the state `asked`. |
+| `advance(life, event, at)` | The transition of the document, with the life after it and its requests. It gives `null` when the state ignores the event. |
+| `waitOf(state, times, fired)` | The wait of the timer of a state: the time of the wait, and that time plus one pass. |
+| `due(life, now, times)` | The event of the timer of the state when its wait ended, or `null`. |
+| `longestLife(times)` | The longest times from the request for a machine to the end of its work. |
+
+- A life is a value: `advance` gives a new life, and it does not change its input.
+- The clock of a life does not go back. A service uses a monotonic clock for it.
+- `@mark1russell7/algebra` calculates each wait from the document, with exact arithmetic.
+- `waitOf`, `due` and `longestLife` throw a `RangeError` for times that `parseMachineTimes` refuses.
+- The package gives no loop and no clock. The dispatcher service has them.
+
+### The longest life
+
+The work of a machine ends at its entry to `done`. `longestLife(times)` gives the longest time from the request to that entry:
+
+| Machine | Longest time |
+| --- | --- |
+| A machine that gets a job | `make + register + idle + job + 4 * pass` |
+| A machine that gets no job | `make + register + idle + 3 * pass` |
+
+The function does not have these formulas. It finds the longest path of the document, with each timer one pass late. Thus a change of the document changes the result.
+
+### A recorded life
+
+The function `replay` of the entry `@mark1russell7/algebra/replay` examines a recorded life against the document. A record has one line for each transition: the state before, the event, the state after and the time. The function reports each line that the document does not permit.
+
 ## The tests
 
 Property tests on `fast-check` hold the rules of the policy:
@@ -207,3 +370,14 @@ Tests hold the check on the machine:
 - The check agrees with a second statement, from the facts of a job.
 - Two machines with different rules write the same lines when the same rules refuse a job.
 - A test starts the program as a process, and it gets the exit codes 0, 1 and 2.
+- The program imports only files of this package and modules of Node.js.
+
+Tests hold the life of a machine:
+
+- The document has no problem in the checks of `@mark1russell7/algebra`, and its schema accepts the document.
+- The document agrees with a second statement of each state and each event.
+- No transition goes back, and each path of the document ends in `destroyed`.
+- A loop with random reports and random times records each life. Each record replays on the document with no problem.
+- In that loop, the work of each machine ends in the longest life.
+- A machine that gets no report goes to `done` by its timer. Then the dispatcher asks the provider again after each wait.
+- The tables and the diagram of this file agree with the document.
