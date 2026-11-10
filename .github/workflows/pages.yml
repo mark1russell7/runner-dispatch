@@ -1,0 +1,53 @@
+# Builds the site of runner-dispatch and publishes it to GitHub Pages at https://mark1russell7.github.io/runner-dispatch/,
+# with the shared Pages workflow of the template (reusable-pages.yml, CI.md "Pages").
+# The home page is the Vite build of packages/site. The site-pages action adds the Releases page and the Status page.
+# The Pages source of the repository is "GitHub Actions" (Settings > Pages).
+# A scheduled build takes the newest commit of main, or the newest green one if CI failed on it.
+# A pull request builds and checks the site in a browser, with no deploy.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  # Every 3 hours, so that the Status page shows the open pull requests and issues of now
+  schedule:
+    - cron: "8 */3 * * *"
+  workflow_dispatch:
+  pull_request:
+
+permissions: {}
+
+# One deployment at a time. A deployment in progress ends, and GitHub keeps only the newest deployment that waits.
+# Each pull request has its own group, and a newer push cancels its run.
+concurrency:
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pages:
+    uses: mark1russell7/template/.github/workflows/reusable-pages.yml@ddf7e495fc88b536e2ea89bb8271ac2d50b28baf # main
+    # The build job of the shared workflow gets only the read permissions. Only its deploy job,
+    # which runs no code of the repository, writes to Pages.
+    permissions:
+      contents: read
+      # green-main reads the Actions runs. site-pages reads the pull requests, the issues and their checks.
+      actions: read
+      issues: read
+      pull-requests: read
+      checks: read
+      statuses: read
+      pages: write
+      id-token: write
+    with:
+      # site-pages adds releases/ and status/ next to the home page.
+      build: pnpm --filter @runner-dispatch/site run build
+      out: packages/site/dist
+      env: '{"SITE_BASE": "/${{ github.event.repository.name }}"}'
+      deploy: ${{ github.event_name != 'pull_request' }}
+      packages: "@mark1russell7/runner-dispatch"
+      site-name: runner-dispatch
+      # The open items for the Status page. check:conventions parses the file on each pull request (roadmap-parses).
+      roadmap: docs/ROADMAP.md
+      # The check opens each page in a browser at 360, 400 and 1280 pixels, in light and dark.
+      site-check: true
+      site-check-pages: /,/releases/,/status/

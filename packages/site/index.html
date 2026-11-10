@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>runner-dispatch</title>
+<meta name="description" content="One-job CI runners for trusted jobs: a source of queued jobs, trust rules as data, and a provider that makes one machine for one job.">
+<script>
+  // The theme before the first paint: the choice of the visitor, else the theme of the system.
+  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./">runner-dispatch</a>
+  <nav aria-label="Site">
+    <a href="./releases/">Releases</a>
+    <a href="./status/">Status</a>
+    <a href="https://github.com/mark1russell7/runner-dispatch">GitHub</a>
+    <button id="theme" class="theme" type="button" aria-label="Change the theme"><span aria-hidden="true">◐</span></button>
+  </nav>
+</header>
+
+<main>
+  <h1>runner-dispatch</h1>
+  <p class="lead">One-job CI runners for trusted jobs: a source of queued jobs, trust rules as data, and a provider that makes one machine for one job.</p>
+
+  <h2>Install</h2>
+  <div class="command">
+    <code id="install">pnpm add @mark1russell7/runner-dispatch</code>
+    <button id="copy" type="button">Copy</button>
+  </div>
+  <p class="note">This package has no release on npm yet. <a href="./releases/">Releases</a> shows each version, and <a href="./status/">Status</a> shows the open work.</p>
+</main>
+
+<script type="module" src="./src/index.ts"></script>
+</body>
+</html>

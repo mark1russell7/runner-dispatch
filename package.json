@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "runner-dispatch-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "package": "template package",
+    "template": "template repo",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck && pnpm run typecheck:scripts",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json",
+    "lint:ste": "ste-lint",
+    "check:boundaries": "depcruise --config .dependency-cruiser.ts packages",
+    "check:api": "api-report check",
+    "check:conventions": "conventions check"
+  },
+  "devDependencies": {
+    "@mark1russell7/api-report": "^0.5.3",
+    "@mark1russell7/boundaries": "^0.2.1",
+    "@mark1russell7/conventions": "^0.40.7",
+    "@mark1russell7/cue": "^2.0.0",
+    "@mark1russell7/ste-lint": "^0.3.0",
+    "@mark1russell7/template-cli": "^0.1.7",
+    "@swc/core": "^1.15.0",
+    "@types/node": "^26.6.5",
+    "dependency-cruiser": "^18.7.0",
+    "publint": "^0.3.25",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

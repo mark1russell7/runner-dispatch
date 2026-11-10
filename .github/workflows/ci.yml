@@ -1,0 +1,167 @@
+# The CI of this repository. The job ci is the shared CI of mark1russell7 (reusable-ci.yml, CI.md)
+# with its default inputs: it runs each standard script that package.json has (format:check,
+# typecheck, lint, check:conventions, test, build in each package that has it, check:boundaries, check:api and lint:ste).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # release.yml starts these gates before a release
+  workflow_call:
+  # A person starts a run on a branch with no pull request: gh workflow run ci.yml --ref <branch>
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push cancels the run of a pull request. Each commit of main has its own group, so its run ends with a result (main-runs-finish).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ci:
+    uses: mark1russell7/template/.github/workflows/reusable-ci.yml@ddf7e495fc88b536e2ea89bb8271ac2d50b28baf # main
+
+  # Each preset of `pnpm package add` makes a package, and that package passes its typecheck and its tests.
+  # The tests of the preset service hold its entry to describe() and lint() of @mark1russell7/service (OTH-5).
+  # A test of the CLI compares this list with the presets of the CLI.
+  # Only the template has the source of the CLI (packages/cli), so a repository from new-repo.ps1 skips this job.
+  presets:
+    if: github.repository == 'mark1russell7/template'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      # The runners are shared by all repositories of the account (the rule runner-budget)
+      max-parallel: 3
+      matrix:
+        preset: [node, node-cjs, ts, vite, react, service, site, electron]
+    env:
+      PACKAGE: demo-${{ matrix.preset }}
+      PRESET: ${{ matrix.preset }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Just after a release of a package of the template, the registry can give 404 for its tarball for some minutes.
+      # Then the step resets the tree and tries again. Each other fault fails the step at once.
+      - name: pnpm package add (again after a registry lag)
+        run: |
+          set -o pipefail
+          for attempt in 1 2 3 4 5; do
+            if pnpm package add "$PACKAGE" --preset="$PRESET" 2>&1 | tee add.log; then rm add.log; exit 0; fi
+            if ! grep -qE 'ERR_PNPM_(TARBALL_HTTP_STATUS|FETCH_404|NO_MATCHING_VERSION)' add.log; then exit 1; fi
+            echo "::warning::Attempt $attempt: the registry does not serve a new version yet. The step tries again in 60 s."
+            git checkout -- . && git clean -fdq -e add.log
+            sleep 60
+          done
+          exit 1
+      # The new package changes the lockfile
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm --filter "@template/$PACKAGE" typecheck
+      - run: pnpm --filter "@template/$PACKAGE" test
+      # A preset with the script smoke starts its app once: the electron app opens its window on a virtual display,
+      # and stops with 0 when its page answers on the port. Ubuntu 24.04 refuses the user namespaces of the sandbox
+      # of Chromium to a binary with no AppArmor profile, so the step allows them. The app keeps its sandbox.
+      - name: smoke (a preset with the script smoke)
+        run: |
+          if ! jq -e '.scripts.smoke' "packages/$PACKAGE/package.json" > /dev/null; then echo "No script smoke."; exit 0; fi
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          xvfb-run --auto-servernum pnpm --filter "@template/$PACKAGE" smoke
+
+  # A new repository passes its install, conventions check, typecheck, tests, Pages build and site check with no hand edit.
+  # Only the template has the stamp (scripts/stamp), so a repository from the stamp skips this job.
+  stamp:
+    if: github.repository == 'mark1russell7/template'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      DEMO: ${{ github.workspace }}/../stamp-demo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/stamp/main.ts stamp-demo --description "A repository of the stamp test." --ref HEAD --out "$DEMO"
+      - name: The new repository installs
+        run: |
+          cd "$DEMO"
+          pnpm install --no-frozen-lockfile
+          git add -A
+          git -c user.name=stamp -c user.email=stamp@example.com commit -q -m "first commit"
+      # The default list of reusable-ci.yml, with each missing script skipped
+      - name: The new repository passes its gates
+        run: |
+          cd "$DEMO"
+          # The rule runner-budget reads the name of the repository from this variable
+          export GITHUB_REPOSITORY=mark1russell7/stamp-demo
+          for script in format:check typecheck lint check:conventions test build check:boundaries check:api lint:ste; do
+            pnpm run --if-present "$script"
+          done
+      - name: The Pages build works
+        env:
+          SITE_BASE: /stamp-demo
+        run: |
+          cd "$DEMO"
+          pnpm --filter @stamp-demo/site run build
+          pnpm --filter @stamp-demo/site exec site-pages build --out dist --repo mark1russell7/stamp-demo --roadmap ../../docs/ROADMAP.md --site-name stamp-demo
+      # The same browser and the same check as reusable-pages.yml
+      - name: Install the browser of the site check
+        run: npm install --prefix "$RUNNER_TEMP/site-check-playwright" --no-save --no-package-lock --no-audit --no-fund playwright-core@1.64.1
+      - uses: mark1russell7/template/.github/actions/setup-playwright@ddf7e495fc88b536e2ea89bb8271ac2d50b28baf # main
+        with:
+          command: ${{ runner.temp }}/site-check-playwright/node_modules/.bin/playwright-core
+          browsers: chromium
+      - name: The site passes the site check
+        run: node packages/site-pages/src/check/main.ts --out "$DEMO/packages/site/dist" --repo mark1russell7/stamp-demo --pages /,/releases/,/status/ --shots "$RUNNER_TEMP/site-check"
+
+  # The one check of the ruleset of main (CI.md, "The check of the ruleset"). It passes only when
+  # each job of needs passed, or was skipped by its own if and ALLOW_SKIP names it. A new job of this
+  # file goes in needs, so the ruleset never has to change, and gh pr merge --auto waits for the whole gate.
+  ci-ok:
+    name: CI OK
+    if: ${{ !cancelled() }}
+    needs: [ci, presets, stamp]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Each job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          # The jobs that their own if may skip, separated by spaces. Each other job must pass.
+          ALLOW_SKIP: "presets stamp"
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key) \(.value.result)"' > results
+          cat results
+          if [ ! -s results ]; then echo "::error::no job in needs"; exit 1; fi
+          bad=0
+          while read -r job result; do
+            case "$result" in
+              success) ;;
+              skipped) case " $ALLOW_SKIP " in *" $job "*) ;; *) echo "::error::$job was skipped, and ALLOW_SKIP does not name it"; bad=1 ;; esac ;;
+              *) echo "::error::$job: $result"; bad=1 ;;
+            esac
+          done < results
+          exit $bad

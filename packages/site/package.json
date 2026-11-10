@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@runner-dispatch/site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@mark1russell7/cue": "^2.0.0",
+    "@mark1russell7/site-pages": "^0.4.6",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7",
+    "vitest": "^5.0.3"
+  }
+}

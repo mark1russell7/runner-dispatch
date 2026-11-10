@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@mark1russell7/cue/ts/config/node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "rootDir": ".",
+    "outDir": null
+  },
+  "include": [
+    "scripts/**/*.ts",
+    ".github/actions/**/*.ts",
+    ".dependency-cruiser.ts"
+  ],
+  "exclude": [
+    "**/node_modules"
+  ]
+}

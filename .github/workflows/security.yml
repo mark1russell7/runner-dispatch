@@ -1,0 +1,52 @@
+# The security scans of this repository (the action security-scan, CI.md): dependency review, osv-scanner and
+# CodeQL, in one job. A pull request fails only for a new finding at or above high.
+# Other repositories use mark1russell7/template/.github/actions/security-scan@<commit> # main
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # A weekly scan finds the new advisories for the dependencies that do not change. The minute comes from the
+  # repository and the file (the rule runner-budget), so the scans of the repositories do not start together.
+  schedule:
+    - cron: "3 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The one check of this file that the ruleset of main names, next to CI OK (CI.md, "The check of the
+  # ruleset"). The scans run in this job, so a run asks for one runner. The last step of the action fails when
+  # a scan fails, and names that scan. The scans stay out of ci.yml, because release.yml calls ci.yml with
+  # contents: read only.
+  security-ok:
+    name: Security OK
+    runs-on: ubuntu-latest
+    # The time limit of the three scans together
+    timeout-minutes: 30
+    # security-events: write uploads the results (not on a pull request). actions: read lets CodeQL and the
+    # upload read the run in a private repository.
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      # The template runs the action of this commit, so it checks out the folder of the actions first. A
+      # repository that pins the action to a commit needs no such step: the action checks out the repository.
+      # The stamp copies this file, so the step runs only in the template. In a private repository, its partial
+      # clone makes the later checkout of the base fail: the fetch from the promisor remote has no credentials.
+      - if: github.repository == 'mark1russell7/template'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: mark1russell7/template/.github/actions/security-scan@ddf7e495fc88b536e2ea89bb8271ac2d50b28baf # main
