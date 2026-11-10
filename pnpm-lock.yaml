@@ -203,6 +203,31 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/dispatcher:
+    dependencies:
+      '@mark1russell7/runner-dispatch':
+        specifier: workspace:*
+        version: link:../runner-dispatch
+      '@mark1russell7/service':
+        specifier: ^0.8.6
+        version: 0.8.6(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.3
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.7(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/runner-dispatch:
     dependencies:
       '@mark1russell7/algebra':
@@ -481,6 +506,10 @@ packages:
       dependency-cruiser:
         optional: true
 
+  '@mark1russell7/collections@0.10.0':
+    resolution: {integrity: sha512-WsLRfrej6msQLVqcS17x6KODic8bLf/IuOF2tD04NNbOhWKYCQi0xAEGBCy/TtthxRvRa6Yti2fcpeIQbX/nCA==}
+    engines: {node: '>=22.12'}
+
   '@mark1russell7/conventions@0.40.7':
     resolution: {integrity: sha512-680r6cxqPyUyewNAkjf0CDRCrQbcE6bfv4K/EnQTNPOk9x6+g1EsZ+4LBqz032055CA6NRL8eTXoc3vmDJArwA==}
     engines: {node: '>=22'}
@@ -490,6 +519,10 @@ packages:
     resolution: {integrity: sha512-CeQu2WZKGHjkZxjJ/bY60QiNYlfsDfrKwZfBeOmZSvOmEZlWRa8KlLtJ0mufNJ+pEogvfq+MB10JejCMyRH/Iw==}
     engines: {node: '>=22'}
     hasBin: true
+
+  '@mark1russell7/optional@1.2.0':
+    resolution: {integrity: sha512-vS5jF21WC/VApRv4p8afRZahcMl9cuNp03LxbVngY9nYkzq+S7Oit6ksySt2baML+tp46UF60sxnHxn1jlwtTg==}
+    engines: {node: '>=22.12'}
 
   '@mark1russell7/quantity@0.3.5':
     resolution: {integrity: sha512-RCwaYZjMH3mVbnhLIW/xz2Enz4ekUBOY80g20pb4nhk9I1U9eDXd/eMxmkvN+/szFYjpzTRQp7Skq7zk2DVxzA==}
@@ -512,6 +545,36 @@ packages:
     resolution: {integrity: sha512-UnBEZVSVSytwFH5pJ5ezlOCEs/19Ur0/REQ+Tq5BYs8uYWSNoP/hZNGx2tdqLN2Rn0u+A41GwieBnuM6DuWS4g==}
     engines: {node: '>=22'}
 
+  '@mark1russell7/service@0.8.6':
+    resolution: {integrity: sha512-BX5effgTFE+EyT1Id/w9Xr8xcUmRfs+PuvaLhYGGXraXTe1v0ISRiqL3hM3MNi7gCpfvve/n6lSvZoC8pBPlnw==}
+    engines: {node: '>=22.19'}
+    peerDependencies:
+      '@grpc/grpc-js': ^1.14.6
+      '@opentelemetry/api': ^1.9.0
+      amqplib: ^2.2.0
+      ioredis: ^6.0.0
+      mongodb: ^7.7.0
+      pg: ^8.23.1
+      ws: ^8.22.0
+      zod: ^4.1.0
+    peerDependenciesMeta:
+      '@grpc/grpc-js':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      amqplib:
+        optional: true
+      ioredis:
+        optional: true
+      mongodb:
+        optional: true
+      pg:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   '@mark1russell7/site-pages@0.4.6':
     resolution: {integrity: sha512-h/vcASVZcbf3UhDBHlalot0PvAzt8tUpLC6ngZgZoZJSw9Aj3Pcm6lw5irKmP1o42aFI8SnhJvxSuC9PUWZPAg==}
     engines: {node: '>=22'}
@@ -526,6 +589,10 @@ packages:
     resolution: {integrity: sha512-Wy4xa6OgNXyMunSyXOArxmrspLSCuyw1pf1P5X45Uiwe1aWHzn0LJptUYVGUSwT3GTp9FGVDhFMeOnKlapD3Xw==}
     engines: {node: '>=22.12'}
     hasBin: true
+
+  '@mark1russell7/text@0.0.2':
+    resolution: {integrity: sha512-m1aIB8X+PDekktzr1fYOp1/7gvlh9iL/2M7ktj/GnmPmVrWin0rTADgTm00dKFdWFRzXraCUYkjyCl3jQZHEVg==}
+    engines: {node: '>=22.12'}
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
@@ -1514,11 +1581,21 @@ snapshots:
       '@swc/core': 1.16.22
       dependency-cruiser: 18.7.2
 
+  '@mark1russell7/collections@0.10.0(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.4(zod@4.6.7)
+      '@mark1russell7/optional': 1.2.0
+      '@mark1russell7/rigor-statistics': 0.1.27
+    transitivePeerDependencies:
+      - zod
+
   '@mark1russell7/conventions@0.40.7':
     dependencies:
       yaml: 2.9.1
 
   '@mark1russell7/cue@2.1.3': {}
+
+  '@mark1russell7/optional@1.2.0': {}
 
   '@mark1russell7/quantity@0.3.5(zod@4.6.7)':
     dependencies:
@@ -1534,6 +1611,16 @@ snapshots:
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.14
 
+  '@mark1russell7/service@0.8.6(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.4(zod@4.6.7)
+      '@mark1russell7/collections': 0.10.0(zod@4.6.7)
+      '@mark1russell7/quantity': 0.3.5(zod@4.6.7)
+      '@mark1russell7/rigor-generators': 0.1.14
+      '@mark1russell7/text': 0.0.2
+    optionalDependencies:
+      zod: 4.6.7
+
   '@mark1russell7/site-pages@0.4.6':
     dependencies:
       '@mark1russell7/rigor-statistics': 0.1.27
@@ -1545,6 +1632,8 @@ snapshots:
   '@mark1russell7/template-cli@0.1.7':
     dependencies:
       '@clack/prompts': 1.9.0
+
+  '@mark1russell7/text@0.0.2': {}
 
   '@oxc-project/types@0.156.0': {}
 

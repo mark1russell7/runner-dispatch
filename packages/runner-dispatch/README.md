@@ -1,6 +1,6 @@
 # @mark1russell7/runner-dispatch
 
-The records, the trust rules, the check on the machine and the life of a machine of a dispatcher of one-job CI runners. The package is not on npm yet.
+The records, the trust rules, the check on the machine, the life of a machine and the passes of a dispatcher of one-job CI runners. The package is not on npm yet.
 
 A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has the life of a machine as a state machine. It has no network code.
 
@@ -10,7 +10,7 @@ A dispatcher gives a runner only to a job of a trusted run. This package has the
 | --- | --- |
 | `RunRecord` | The part of a workflow run that the policy reads: the repository, the id, the number of the try, the event, the head repository and the two actors. |
 | `JobRecord` | One job of a run that waits for a runner, with the labels that it asks for. |
-| `MachineRecord` | One machine that a provider makes for the jobs of one run. |
+| `MachineRecord` | One machine that a provider makes for one job of a run. |
 
 GitHub keeps each field of `RunRecord`. A fork cannot change them. A fork can write each label of a job, so the policy does not read a label.
 
@@ -241,7 +241,7 @@ stateDiagram-v2
 
 - `provider.made`, `provider.failed` and `provider.destroyed` are reports of the provider.
 - `runner.registered`, `job.started`, `job.completed` and `job.none` are reports of GitHub.
-- `job.none` tells that the run has no job for this runner: each job ended, or another runner has it.
+- `job.none` tells that the run has no job for this runner: each job ended, another runner has it, or the runner has no registration.
 - `stop` is the stop switch of the dispatcher.
 - The dispatcher asks the provider to destroy the machine at each transition into `done`.
 - A state ignores each event that is not in its rows.
@@ -335,7 +335,7 @@ longestLife(times);
 - The clock of a life does not go back. A service uses a monotonic clock for it.
 - `@mark1russell7/algebra` calculates each wait from the document, with exact arithmetic.
 - `waitOf`, `due` and `longestLife` throw a `RangeError` for times that `parseMachineTimes` refuses.
-- The package gives no loop and no clock. The dispatcher service has them.
+- These functions give no loop and no clock. `createDispatcher` takes a clock, and the dispatcher service has the loop.
 
 ### The longest life
 
@@ -351,6 +351,130 @@ The function does not have these formulas. It finds the longest path of the docu
 ### A recorded life
 
 The function `replay` of the entry `@mark1russell7/algebra/replay` examines a recorded life against the document. A record has one line for each transition: the state before, the event, the state after and the time. The function reports each line that the document does not permit.
+
+## The dispatcher
+
+A dispatcher joins a source of jobs, the policy and a provider of machines. Its work is a sequence of passes. One pass reads the facts, makes a plan and sends the requests of the plan.
+
+### The settings of a dispatcher
+
+The settings are a JSON document with the format `dispatch-settings/1`. `parseDispatchSettings` reads the document, and `settingsProblems` gives each problem as one sentence. The document has no default.
+
+```json
+{
+  "format": "dispatch-settings/1",
+  "prefix": "rd",
+  "capacity": 3,
+  "sizes": ["small", "large"],
+  "standard": "small"
+}
+```
+
+| Field | Value |
+| --- | --- |
+| `prefix` | The first part of each machine name: a small letter, then 15 small letters or digits at most. |
+| `capacity` | The largest count of machines at one time, from 1 to 1000. |
+| `sizes` | The size classes of the provider. A name starts with a small letter, and it is not a run label. |
+| `standard` | The size of a job that names no size. It is one of the sizes. |
+
+- `machineName(prefix, run, suffix)` gives the name `<prefix>-<id of the run>-<try>-<suffix>`. The suffix is 8 digits of base 16.
+- The runner of a machine has the name of the machine. `parseMachineName` reads only a name that `machineName` gives for the prefix.
+- Give a different prefix to each dispatcher of one repository or of one provider.
+- `runnerLabels(label, size)` gives the labels of a runner: the run label and the size.
+- `sizeOfLabels` gives the size that a job asks for. A job names the run label, and one size at most.
+- A job with a different label gets no machine. The report of the pass tells it with the reason `label`.
+
+### The two ports
+
+A host gives the dispatcher two ports. `JobSource` is the source of the jobs, for example GitHub. `MachineProvider` is the provider of the machines, for example a hypervisor.
+
+| Method | Work |
+| --- | --- |
+| `source.view(repository, runs, signal)` | It gives the runs of a repository that are not completed, and its runner registrations. |
+| `source.register(request, signal)` | It makes a runner registration for one job. It gives the id and the one-job configuration. |
+| `source.remove(repository, runnerId, signal)` | It removes a registration. It succeeds when the registration is not there. |
+| `provider.make(request, signal)` | It asks for a machine. It ends when the provider accepts the request, before the machine operates. |
+| `provider.machines(signal)` | It gives each machine of the dispatcher, with its record and its status. |
+| `provider.destroy(name, signal)` | It asks the provider to destroy a machine. It succeeds when the machine is not there. |
+
+- A method throws when it cannot give a complete answer. The dispatcher then has no fact, and it does not decide from a part of a list.
+- A view has each registration of the dispatcher. A machine with no job whose runner is not in the view goes to `done`.
+- The provider keeps the record of each machine. A dispatcher that starts again reads the run of a machine from it.
+- A port reads its signal. The dispatcher cannot stop a request that does not read the signal.
+- A port limits the rate of its own requests. The dispatcher sends the requests of one pass together.
+- The one-job configuration is a credential for one use. The dispatcher gives it only to the provider.
+
+### The plan
+
+`plan(state, seen, config)` is the decision of one pass. It reads the memory and the facts of the pass, and it has no effect.
+
+- The memory has the life of each machine, and the count of failed machines of each run. `EMPTY_STATE` is the memory of a new dispatcher.
+- The facts are the time, the stop switch, the view of each served repository and the machines of the provider.
+- A fact that the pass did not read is `null`. It gives no event, and no machine starts from it.
+- The plan adopts each machine of the provider that the memory does not have.
+- Each life gets the events that the facts show, in the sequence of the document `MACHINE_LIFECYCLE`.
+- A machine goes to `done` when it stopped, the stop switch is on, the policy does not trust its run, or its timer fires.
+- The plan asks for one machine for each queued job of a trusted run, less the machines of the run that wait for a job.
+- A run with more machines than queued jobs loses the machines with no connected runner, the newest first.
+- The plan removes each registration of the dispatcher that has no job and no machine that works.
+- The runs get machines in turn, the oldest run first, to the capacity.
+
+A queued job that gets no machine in a pass is in the list `waits`, with one of these reasons:
+
+| Reason | Cause |
+| --- | --- |
+| `trust` | The policy does not trust the run. The text has each refusal. |
+| `label` | The job names a label that is not the run label or a size of the settings. |
+| `stop` | The stop switch is on, or the dispatcher cannot read it. |
+| `provider` | The provider gave no list of its machines. |
+| `backoff` | A machine of the run failed before a job, and the wait before the next request did not end. |
+| `capacity` | The dispatcher has its largest count of machines. |
+
+### A pass
+
+```ts
+import { createDispatcher } from "@mark1russell7/runner-dispatch";
+
+const dispatcher = createDispatcher({ rules, times, settings, source, provider, now, suffix, stopped });
+const report = await dispatcher.pass(signal);
+```
+
+1. The pass reads the stop switch, the machines of the provider and the view of each repository of the trust rules.
+2. The pass makes the plan.
+3. The pass removes registrations and destroys machines. The two groups of requests start together.
+4. The pass makes a registration for each new machine, then it asks the provider for the machine.
+
+- A request that fails is in the list `failures` of the report. The pass does not throw for it, and the next pass tries again.
+- The text of a failure has no one-job configuration. Thus a log can keep each report.
+- The field `cut` is `true` when the signal stopped the pass before each request started.
+- `createDispatcher` throws a `RangeError` for trust rules, times or settings that are not valid.
+- The dispatcher keeps its memory only in the process. After a new start, the first pass adopts each machine of the provider.
+- With the stop switch on, a pass makes no machine, and it asks the provider to destroy each machine.
+- With a stop switch that the pass cannot read, a pass makes no machine and destroys no machine for the switch.
+
+The tests found these limits. They are properties of the run label, not defects of a pass:
+
+- A job that names only the run label can go to a runner of each size of its run.
+- A run from a fork can write the run label of a trusted run. Its job can take the runner of that run.
+- The check on the machine then refuses the job, and no step starts. The trusted job waits for the next machine.
+
+### The fake world
+
+The entry `@mark1russell7/runner-dispatch/testing` has a source and a provider for tests, on one clock.
+
+```ts
+import { countingSuffix, fakeWorld } from "@mark1russell7/runner-dispatch/testing";
+
+const world = fakeWorld({ clock, times: { boot: 2000, connect: 1000, destroy: 500 } });
+world.addRun(run, [{ labels: ["run-100-1"], duration: 3000 }]);
+```
+
+- A machine of the world boots, connects its runner, takes one job of its labels, and stops after the job.
+- The world starts the check on the machine before each job, with the settings that the dispatcher gave.
+- `faults` makes a request fail: `refuse` has no effect, and `lose` has the effect and loses the answer.
+- `cancelRun`, `lose` and `halt` cancel a run, remove a machine and stop a machine.
+- `jobs()`, `runners()`, `machines()`, `events()`, `peak()` and `secrets()` give the state of the world to a test.
+- `countingSuffix` gives the suffixes `00000000`, `00000001` and the subsequent numbers. Thus the names of a test are known.
 
 ## The tests
 
@@ -381,3 +505,13 @@ Tests hold the life of a machine:
 - In that loop, the work of each machine ends in the longest life.
 - A machine that gets no report goes to `done` by its timer. Then the dispatcher asks the provider again after each wait.
 - The tables and the diagram of this file agree with the document.
+
+Tests hold the dispatcher:
+
+- A property test holds the rules of a plan for each memory and each set of facts.
+- On the fake world, each served job of a trusted run ends one time, also after a new start of the dispatcher.
+- No machine starts for a run that the policy does not trust, and no step of a job of that run starts.
+- A machine does only a job of its run, and the count of machines is not more than the capacity.
+- After the requests stop to fail, each served job ends, and no machine and no registration stays.
+- After the pass that reads the stop switch on, no machine starts, and no machine stays.
+- No report and no failure text has a one-job configuration.

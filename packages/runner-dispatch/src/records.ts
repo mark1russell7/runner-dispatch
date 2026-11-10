@@ -33,9 +33,9 @@ export interface JobRecord {
   readonly labels: readonly string[];
 }
 
-/** This record is one machine that a provider makes for the jobs of one run. */
+/** This record is one machine that a provider makes for one job of a run. */
 export interface MachineRecord {
-  /** This field is the name of the machine. The provider gives it. */
+  /** This field is the name of the machine and of its runner. The dispatcher gives it. */
   readonly name: string;
   /** This field is the size class of the machine, for example `small`. */
   readonly size: string;
