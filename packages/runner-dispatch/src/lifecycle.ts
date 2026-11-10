@@ -98,7 +98,7 @@ export const MACHINE_LIFECYCLE: Machine = freeze<Machine>({
     "runner.registered": { kind: "rx", note: "GitHub shows that the runner of the machine is connected" },
     "job.started": { kind: "rx", note: "GitHub gives a job to the runner of the machine" },
     "job.completed": { kind: "rx", note: "the job of the runner ends, with each result" },
-    "job.none": { kind: "rx", note: "the run of the machine has no job for this runner: each job ended, or another runner has it" },
+    "job.none": { kind: "rx", note: "the run of the machine has no job for this runner: each job ended, another runner has it, or the runner has no registration" },
     stop: { kind: "app", note: "the stop switch of the dispatcher" },
     "provider.destroyed": { kind: "rx", note: "the provider tells that the machine is not there" },
     "provider.destroy": { kind: "tx", note: "the dispatcher asks the provider to destroy the machine" },

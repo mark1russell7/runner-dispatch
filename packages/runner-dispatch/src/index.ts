@@ -58,3 +58,53 @@ export {
   type MachineTimesResult,
   type MachineWait,
 } from "./lifecycle.ts";
+export {
+  DISPATCH_CAPACITY_MAX,
+  DISPATCH_SETTINGS_FORMAT,
+  machineName,
+  parseDispatchSettings,
+  parseMachineName,
+  runnerLabels,
+  sizeOfLabels,
+  type DispatchSettings,
+  type DispatchSettingsResult,
+} from "./settings.ts";
+export type {
+  JobSource,
+  JobStatus,
+  MachineProvider,
+  MachineRequest,
+  MachineStatus,
+  ProviderMachine,
+  RepositoryView,
+  RunnerRegistration,
+  RunnerRequest,
+  SourceJob,
+  SourceRun,
+  SourceRunner,
+  StopSignal,
+} from "./ports.ts";
+export {
+  EMPTY_STATE,
+  plan,
+  type DispatchConfig,
+  type DispatchLife,
+  type DispatchState,
+  type LifeStep,
+  type Observation,
+  type Plan,
+  type PlannedMake,
+  type PlannedRemoval,
+  type PlannedWait,
+  type RepositoryObservation,
+  type RunFailures,
+  type WaitReason,
+} from "./plan.ts";
+export {
+  createDispatcher,
+  type Dispatcher,
+  type DispatcherOptions,
+  type PassFailure,
+  type PassReport,
+  type PassRequest,
+} from "./dispatcher.ts";

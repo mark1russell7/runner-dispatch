@@ -2,7 +2,7 @@
 
 One-job CI runners for trusted jobs. The dispatcher gives a waiting job of GitHub Actions a new machine, for that job only. It destroys the machine after the job.
 
-The first package has the records, the trust rules, the check on the machine and the life of a machine. The sources, the providers and the service are not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
+The first package has the records, the trust rules, the check on the machine, the life of a machine and the passes of a dispatcher. The second package declares the dispatcher as a service. The source of GitHub, the provider of Proxmox VE and the program of the service are not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
 
 ## The problem
 
@@ -47,7 +47,8 @@ The dispatcher asks GitHub for the one-job configuration of each runner. The per
 
 | Package | What it has |
 | --- | --- |
-| [`@mark1russell7/runner-dispatch`](packages/runner-dispatch) | The records of a run, a job and a machine, the trust rules as data, the policy, the check on the machine with its job-started program, and the life of a machine as a state machine. The sources, the providers and the dispatcher service come next. It is not on npm yet. |
+| [`@mark1russell7/runner-dispatch`](packages/runner-dispatch) | The records of a run, a job and a machine, the trust rules as data, the policy, the check on the machine with its job-started program, and the life of a machine as a state machine. It also has the settings of a dispatcher, the two ports, the plan of a pass and a fake world for tests. It is not on npm yet. |
+| [`@runner-dispatch/dispatcher`](packages/dispatcher) | The dispatcher as one service of `@mark1russell7/service`: the loop of the passes, its times, its liveness check and its shutdown. The program comes with the first source and the first provider. It is private. |
 
 Other packages give the general parts:
 
