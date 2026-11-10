@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHECK_SETTINGS_FORMAT } from "../check.ts";
@@ -106,5 +106,29 @@ describe("the job-started program", () => {
     const eventPath = write("variable.json", { repository: { full_name: "octo/app" } });
     const variables = job(eventPath, { RUNNER_DISPATCH_CHECK: settingsPath, CHECK_SETTINGS: settingsPath });
     expect(start([], variables).code).toBe(2);
+  });
+
+  it("imports only files of this package and modules of Node.js, thus a machine needs no installed package", () => {
+    // A machine has the source files of this package and the Node.js of the runner program. It has no node_modules.
+    const source = dirname(dirname(PROGRAM));
+    const files = new Set<string>();
+    const others: string[] = [];
+    const read = (file: string): void => {
+      if (files.has(file)) return;
+      files.add(file);
+      const text = readFileSync(file, "utf8");
+      // Each import is static: the files have no import() and no require().
+      expect(/\bimport\s*\(|\brequire\s*\(/.test(text), file).toBe(false);
+      for (const match of text.matchAll(/^(?:import|export)\b[^;]*?\bfrom\s+"([^"]+)";|^import\s+"([^"]+)";/gm)) {
+        const name = match[1] ?? match[2] ?? "";
+        if (name.startsWith("node:")) continue;
+        if (name.startsWith("./") || name.startsWith("../")) read(resolve(dirname(file), name));
+        else others.push(`${relative(source, file)}: ${name}`);
+      }
+    };
+    read(PROGRAM);
+    expect(others).toEqual([]);
+    const names = [...files].map((file) => relative(source, file).replaceAll("\\", "/")).sort();
+    expect(names).toEqual(["check.ts", "cli/job-started.ts", "job-started.ts", "policy.ts", "records.ts"]);
   });
 });
