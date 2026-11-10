@@ -143,10 +143,15 @@ The runner program starts one script before the first step of each job. The vari
 
 ```sh
 #!/bin/sh
-exec node /opt/runner-dispatch/packages/runner-dispatch/src/cli/job-started.ts /etc/runner-dispatch/check.json
+exec /opt/actions-runner/externals/node24/bin/node \
+  /opt/runner-dispatch/packages/runner-dispatch/src/cli/job-started.ts /etc/runner-dispatch/check.json
 ```
 
 The argument is the path of the settings file. The program reads the event file from the path in `GITHUB_EVENT_PATH`.
+
+- The runner program has its own Node.js in its folder `externals`. Thus the machine needs no second Node.js for the check.
+- Each path of the script is absolute. Thus `PATH` does not select the Node.js or the program.
+- When a file of the script is absent, the script fails, and the runner program fails the job.
 
 | Exit code | Meaning |
 | --- | --- |
@@ -171,7 +176,18 @@ The documentation of GitHub does not state when the job-started script starts, o
 - A job cannot change which script the runner program starts.
 - The script gets the environment of the runner program. It gets no token of the job.
 
-No probe measured the runner program on Windows or on macOS. A new version of the runner program can change the sequence. Thus a probe with this program must pass for each new version (item R2 of the roadmap).
+Then two probes started this program as the script, on the same runner program. The program was that of the commit `648bb37`:
+
+| Settings of the machine | Result |
+| --- | --- |
+| The run of the job, with rules that trust it | The program gave the code 0 in 114 ms. Each step of the job started. |
+| A different run, with rules that do not list the event of the job | The program gave the code 1 in 123 ms, with one line for each of the two rules. The job failed in its second step, and no step started. |
+
+- The runner program 2.338.2 has Node.js 24.22.1 in its folder `externals/node24`. This Node.js started the TypeScript file with no flag and no package.
+- The lines of the program are in the log of the job, in the step "Set up runner".
+- The two times are those of a GitHub-hosted machine.
+
+No probe measured the runner program on Windows or on macOS. A new version of the runner program can change the sequence, or the folder of its Node.js. Thus these probes must pass for each new version of the runner program, and for each change of this program.
 
 ## The tests
 
