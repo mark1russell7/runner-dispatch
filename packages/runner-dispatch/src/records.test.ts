@@ -159,6 +159,32 @@ describe("sameRun", () => {
     );
   });
 
+  it("is false when one field is different, and the other two are the same", () => {
+    fc.assert(
+      fc.property(key, key, (a, b) => {
+        if (a.repository.toLowerCase() !== b.repository.toLowerCase()) {
+          expect(sameRun(a, { ...a, repository: b.repository })).toBe(false);
+          expect(sameRun({ ...a, repository: b.repository }, a)).toBe(false);
+        }
+        if (a.runId !== b.runId) {
+          expect(sameRun(a, { ...a, runId: b.runId })).toBe(false);
+          expect(sameRun({ ...a, runId: b.runId }, a)).toBe(false);
+        }
+        if (a.runAttempt !== b.runAttempt) {
+          expect(sameRun(a, { ...a, runAttempt: b.runAttempt })).toBe(false);
+          expect(sameRun({ ...a, runAttempt: b.runAttempt }, a)).toBe(false);
+        }
+      }),
+    );
+  });
+
+  it("is false for the same run of a different repository", () => {
+    const a = { repository: "octo/app", runId: 7, runAttempt: 1 };
+    expect(sameRun(a, { ...a, repository: "octo/lib" })).toBe(false);
+    expect(sameRun(a, { ...a, runId: 8 })).toBe(false);
+    expect(sameRun(a, { ...a, runAttempt: 2 })).toBe(false);
+  });
+
   it("is false for a record with a bad id, also against itself", () => {
     fc.assert(
       fc.property(key, notAnId, (a, bad) => {
