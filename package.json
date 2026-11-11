@@ -21,7 +21,7 @@
   "devDependencies": {
     "@mark1russell7/api-report": "^0.5.3",
     "@mark1russell7/boundaries": "^0.2.1",
-    "@mark1russell7/conventions": "^0.40.7",
+    "@mark1russell7/conventions": "^0.41.0",
     "@mark1russell7/cue": "^2.0.0",
     "@mark1russell7/ste-lint": "^0.3.0",
     "@mark1russell7/template-cli": "^0.1.7",
