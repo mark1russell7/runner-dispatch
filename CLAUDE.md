@@ -15,7 +15,7 @@ Write all prose of this repository in the style of ASD-STE100 Simplified Technic
 
 - Each area of code has one home package. Before you write a helper, find its home with `pnpm exec conventions map <words>`.
 - If the home does not have the function, add the function to the home in a pull request. Do not make a local copy.
-- Do not make a new package for an area that has a home. Ask the strategist first.
+- Do not make a new package for an area that has a home. Ask the maintainer first.
 - In a review, report each new function that belongs in another home.
 
 ## Packages
