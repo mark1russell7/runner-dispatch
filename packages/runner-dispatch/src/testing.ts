@@ -1,4 +1,6 @@
 import { checkJob, type CheckRefusal, type CheckSettings, type JobEnvironment } from "./check.ts";
+import { PAGE_SIZE, RUN_LIST_LIMIT, type GitHubAnswer, type GitHubApi, type GitHubRequest } from "./github.ts";
+import { isObject } from "./policy.ts";
 import type {
   JobSource,
   JobStatus,
@@ -80,6 +82,14 @@ export interface WorldJob extends SourceJob {
   readonly refusals: readonly CheckRefusal[];
 }
 
+/** This record is one run of a fake world, with its jobs. */
+export interface WorldRun {
+  /** This field is the record of the run. */
+  readonly run: RunRecord;
+  /** This list has each job of the run. */
+  readonly jobs: readonly WorldJob[];
+}
+
 /** This record is one runner registration of a fake world. */
 export interface WorldRunner extends SourceRunner {
   /** This field is the repository of the registration. */
@@ -140,6 +150,8 @@ export interface FakeWorld {
   machines(): readonly ProviderMachine[];
   /** This method gives each runner registration. */
   runners(): readonly WorldRunner[];
+  /** This method gives each run with its jobs, also a completed run. */
+  runs(): readonly WorldRun[];
   /** This method gives each job, also the completed jobs. */
   jobs(): readonly WorldJob[];
   /** This method gives the largest count of machines at one time. */
@@ -501,6 +513,7 @@ export function fakeWorld(options: FakeWorldOptions): FakeWorld {
         online: runner.online,
         busy: runner.job !== null,
       })),
+    runs: (): readonly WorldRun[] => runs.map((run) => ({ run: { ...run.run }, jobs: run.jobs.map(jobOf) })),
     jobs: (): readonly WorldJob[] => runs.flatMap((run) => run.jobs.map(jobOf)),
     peak: (): number => peak,
     secrets: (): readonly string[] => [...secrets],
@@ -520,5 +533,170 @@ export function countingSuffix(first = 0): () => string {
     const text = (next % 0x1_0000_0000).toString(16).padStart(8, "0");
     next += 1;
     return text;
+  };
+}
+
+/** This record has the options of a fake REST API of GitHub. */
+export interface FakeGitHubOptions {
+  /** This field is the largest count of the items on one page. A small count tests the pages of a list. The default is 100. */
+  readonly pageSize?: number;
+  /** This function gives an answer in place of the world, or `null`. A test uses it for a fault. */
+  readonly answer?: (request: GitHubRequest) => GitHubAnswer | null;
+}
+
+/** This record is a fake REST API of GitHub on a fake world. */
+export interface FakeGitHub {
+  /** This field is the client of the API. */
+  readonly api: GitHubApi;
+  /** This method gives each request, in its sequence. */
+  requests(): readonly GitHubRequest[];
+}
+
+/** This function gives the status of a run from the status of its jobs, as GitHub gives it. */
+const runStatus = (jobs: readonly WorldJob[]): string => {
+  if (jobs.every((job) => job.status === "completed")) return "completed";
+  if (jobs.every((job) => job.status === "queued")) return "queued";
+  return "in_progress";
+};
+
+/** This function gives a run as the REST API of GitHub gives it. */
+const runJson = (run: WorldRun): Record<string, unknown> => ({
+  id: run.run.runId,
+  run_attempt: run.run.runAttempt,
+  event: run.run.event,
+  status: runStatus(run.jobs),
+  repository: { full_name: run.run.repository },
+  head_repository: run.run.headRepository === null ? null : { full_name: run.run.headRepository },
+  actor: { login: run.run.actor },
+  triggering_actor: { login: run.run.triggeringActor },
+});
+
+/** This function gives a job as the REST API of GitHub gives it. */
+const jobJson = (job: WorldJob): Record<string, unknown> => ({
+  id: job.jobId,
+  run_id: job.runId,
+  run_attempt: job.runAttempt,
+  status: job.status,
+  labels: [...job.labels],
+  runner_name: job.runner,
+});
+
+/** This function gives a runner as the REST API of GitHub gives it. */
+const runnerJson = (runner: { runnerId: number; name: string; online: boolean; busy: boolean; labels: readonly string[] }): Record<string, unknown> => ({
+  id: runner.runnerId,
+  name: runner.name,
+  os: "linux",
+  status: runner.online ? "online" : "offline",
+  busy: runner.busy,
+  labels: runner.labels.map((name, index) => ({ id: index + 1, name, type: "custom" })),
+});
+
+const ROUTE = /^\/repos\/([^/]+\/[^/]+)\/actions\/(.+)$/;
+const RUN_ROUTE = /^runs\/(\d+)$/;
+const JOBS_ROUTE = /^runs\/(\d+)\/attempts\/(\d+)\/jobs$/;
+const RUNNER_ROUTE = /^runners\/(\d+)$/;
+
+/**
+ * This function makes a fake REST API of GitHub on a fake world, for the tests of the GitHub source.
+ * It gives the runs, the jobs and the runners of the world in the shape of GitHub, with pages.
+ *
+ * - A list of runs has the newest try of each run, with the newest run first. It has 1,000 runs at most.
+ * - The status of a run comes from its jobs. Each job is completed, each job is queued, or the run is `in_progress`.
+ * - A request for a runner uses the source of the world. Thus the faults of the world apply to it.
+ * - The API answers 409 for a runner name that the repository has and 404 for a runner that is not there. It answers 422 for a busy runner.
+ *
+ * @param world - The fake world
+ * @param options - The size of a page and the faults
+ * @returns The fake API, with the record of each request
+ * @throws RangeError when the size of a page is not a whole number from 1
+ */
+export function fakeGitHubApi(world: FakeWorld, options: FakeGitHubOptions = {}): FakeGitHub {
+  const size = options.pageSize ?? PAGE_SIZE;
+  if (!isId(size)) throw new RangeError("The page size of a fake API is not a whole number from 1.");
+  const log: GitHubRequest[] = [];
+  const answer = (status: number, body: unknown = null): GitHubAnswer => ({ status, body });
+  const number = (value: string | undefined, fallback: number): number => {
+    const given = Number(value);
+    return Number.isSafeInteger(given) && given >= 1 ? given : fallback;
+  };
+  /** This function gives one page of a list. GitHub gives 30 items on a page when the request does not tell the count. */
+  const page = (request: GitHubRequest, key: string, all: readonly unknown[], limit = Number.MAX_SAFE_INTEGER): GitHubAnswer => {
+    const per = Math.min(number(request.query["per_page"], 30), PAGE_SIZE, size);
+    const at = number(request.query["page"], 1);
+    return answer(200, { total_count: all.length, [key]: all.slice(0, limit).slice((at - 1) * per, at * per) });
+  };
+  /** This function gives the newest try of each run of a repository, with the newest run first. */
+  const newest = (repository: string): WorldRun[] => {
+    const found = new Map<number, WorldRun>();
+    for (const run of world.runs()) {
+      if (!sameName(run.run.repository, repository)) continue;
+      const known = found.get(run.run.runId);
+      if (known === undefined || known.run.runAttempt < run.run.runAttempt) found.set(run.run.runId, run);
+    }
+    return [...found.values()].sort((a, b) => b.run.runId - a.run.runId);
+  };
+  const runnersOf = (repository: string) =>
+    world
+      .runners()
+      .filter((runner) => sameName(runner.repository, repository))
+      .sort((a, b) => a.runnerId - b.runnerId);
+
+  const route = async (request: GitHubRequest, signal: StopSignal): Promise<GitHubAnswer> => {
+    const match = ROUTE.exec(request.path);
+    if (match === null) return answer(404);
+    const repository = match[1] as string;
+    const rest = match[2] as string;
+    const { method } = request;
+    if (method === "GET" && rest === "runs") {
+      const status = request.query["status"];
+      const all = newest(repository)
+        .map(runJson)
+        .filter((run) => status === undefined || run["status"] === status);
+      return page(request, "workflow_runs", all, RUN_LIST_LIMIT);
+    }
+    const run = RUN_ROUTE.exec(rest);
+    if (method === "GET" && run !== null) {
+      const found = newest(repository).find((each) => each.run.runId === Number(run[1]));
+      return found === undefined ? answer(404) : answer(200, runJson(found));
+    }
+    const jobs = JOBS_ROUTE.exec(rest);
+    if (method === "GET" && jobs !== null) {
+      const found = world
+        .runs()
+        .find((each) => sameName(each.run.repository, repository) && each.run.runId === Number(jobs[1]) && each.run.runAttempt === Number(jobs[2]));
+      return found === undefined ? answer(404) : page(request, "jobs", [...found.jobs].sort((a, b) => a.jobId - b.jobId).map(jobJson));
+    }
+    if (method === "GET" && rest === "runners") return page(request, "runners", runnersOf(repository).map(runnerJson));
+    if (method === "POST" && rest === "runners/generate-jitconfig") {
+      const body: Record<string, unknown> = isObject(request.body) ? request.body : {};
+      const { name, labels } = body;
+      if (typeof name !== "string" || !Array.isArray(labels) || !labels.every((label) => typeof label === "string")) return answer(422);
+      if (runnersOf(repository).some((runner) => runner.name === name)) return answer(409);
+      const made = await world.source.register({ repository, name, labels: labels as string[] }, signal);
+      const runner = { runnerId: made.runnerId, name, online: false, busy: false, labels: labels as string[] };
+      return answer(201, { runner: runnerJson(runner), encoded_jit_config: made.configuration });
+    }
+    const runner = RUNNER_ROUTE.exec(rest);
+    if (method === "DELETE" && runner !== null) {
+      const found = runnersOf(repository).find((each) => each.runnerId === Number(runner[1]));
+      if (found === undefined) return answer(404);
+      if (found.busy) return answer(422);
+      await world.source.remove(repository, found.runnerId, signal);
+      return answer(204);
+    }
+    return answer(404);
+  };
+
+  return {
+    api: {
+      request(request: GitHubRequest, signal: StopSignal): Promise<GitHubAnswer> {
+        log.push({ ...request, query: { ...request.query } });
+        if (signal.aborted) return Promise.reject(new Error(`The signal stopped the request ${request.method} ${request.path}.`));
+        const given = options.answer?.(request) ?? null;
+        if (given !== null) return Promise.resolve(given);
+        return route(request, signal);
+      },
+    },
+    requests: (): readonly GitHubRequest[] => [...log],
   };
 }
