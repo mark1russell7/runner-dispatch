@@ -1,8 +1,8 @@
 # @mark1russell7/runner-dispatch
 
-The records, the trust rules, the check on the machine, the life of a machine and the passes of a dispatcher of one-job CI runners. The package is not on npm yet.
+The records, the trust rules, the check on the machine and the life of a machine of one-job CI runners. It also has the passes of a dispatcher and the GitHub source. The package is not on npm yet.
 
-A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has the life of a machine as a state machine. It has no network code.
+A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has the life of a machine as a state machine. It has no network code. The GitHub source sends its requests through a client that the host gives.
 
 ## The records
 
@@ -475,6 +475,72 @@ world.addRun(run, [{ labels: ["run-100-1"], duration: 3000 }]);
 - `cancelRun`, `lose` and `halt` cancel a run, remove a machine and stop a machine.
 - `jobs()`, `runners()`, `machines()`, `events()`, `peak()` and `secrets()` give the state of the world to a test.
 - `countingSuffix` gives the suffixes `00000000`, `00000001` and the subsequent numbers. Thus the names of a test are known.
+- `fakeGitHubApi(world, { pageSize })` is a fake REST API of GitHub on the world. Its lists have pages of `pageSize` items at most.
+
+## The GitHub source
+
+The entry `@mark1russell7/runner-dispatch/github` has a source on the REST API of GitHub. Its runners register on a repository.
+
+```ts
+import { createGitHubSource } from "@mark1russell7/runner-dispatch/github";
+
+const source = createGitHubSource({ api });
+```
+
+`api` is a client of the REST API. Its one method `request(request, signal)` gives the status and the JSON body of the answer. The client has these tasks:
+
+- It adds the credential and the version of the API to each request.
+- It sends a conditional request when it has an answer with an `ETag`. For the status 304, it gives the stored answer with the status 200.
+- It limits the rate of its requests, and it waits after a refusal for the rate.
+- It throws only when it gets no answer. Each status is an answer.
+
+The client is the next part of item R4. It goes to `@procedures/gh`, the package of the calls of the GitHub API.
+
+### The requests of a view
+
+| Request | Count in one view |
+| --- | --- |
+| `GET /repos/{repository}/actions/runs?status={status}` | One for each status of `OPEN_RUN_STATUSES`: `queued`, `in_progress`, `requested`, `waiting` and `pending`. |
+| `GET /repos/{repository}/actions/runs/{run}` | One for each named run that is not in the lists. |
+| `GET /repos/{repository}/actions/runs/{run}/attempts/{try}/jobs` | One for each open run. |
+| `GET /repos/{repository}/actions/runners` | One. |
+
+Each list has pages of 100 items. A longer list needs one request for each page.
+
+- A run in two lists is one run, with its newest try. GitHub starts a new try only after the try before it is completed.
+- A named run that is completed or not there (404) is not in the view. A named run with a newer try is in the view with the newer try.
+- A job with the status `waiting`, `requested` or `pending` does not wait for a runner yet. The view does not show it.
+- A field of the policy that the answer does not give is the empty text. The policy refuses such a run.
+- The view throws for a list that changed between its pages, and for a list of more than 1,000 runs. GitHub gives 1,000 runs at most for a list with a status.
+- The view throws for a job status that it does not know and for a run of a different repository. It also throws for a job of a different run and for a runner with no busy field.
+- The source examines each repository name before it puts the name in a path. `.` and `..` are not names.
+
+### The requests for a runner
+
+| Request | Answer that the source accepts |
+| --- | --- |
+| `POST /repos/{repository}/actions/runners/generate-jitconfig` with `name`, `runner_group_id` and `labels` | 201, with the runner id and the one-job configuration |
+| `DELETE /repos/{repository}/actions/runners/{id}` | 204, or 404 for a runner that is not there |
+
+- The runner group is 1, the default group of a repository. The option `runnerGroup` changes it.
+- The text of an error has the status of the answer, and no part of its body. Thus a one-job configuration does not go to a log.
+- The source refuses a registration whose answer has a different runner name.
+
+### The rate of the requests
+
+The REST API of GitHub has two limits that a dispatcher meets:
+
+- The primary limit is 5,000 requests an hour for a token of a person or of a GitHub App. A conditional request with the answer 304 does not count.
+- The secondary limit is 900 points a minute. A `GET` costs 1 point, and a `POST` or a `DELETE` costs 5 points. The documentation does not tell the cost of an answer 304.
+
+One pass for `r` repositories sends `G = 6r + o + n` requests `GET` when each list has one page. Here `o` is the count of the open runs. `n` is the count of the runs that the dispatcher names and the lists do not have. A pass each `p` seconds then uses `60 G / p` points a minute, and each registration and each removal adds 5 points.
+
+For example, 40 repositories with no open run give `G = 240`. A pass each 16 seconds then uses the full limit of 900 points a minute. Thus such a dispatcher needs a longer period, or a token for each group of repositories.
+
+### What the source does not do yet
+
+- The source supports only runners of a repository. The runners of an organization are a later part of item R4.
+- A test with a real credential measures the smallest permissions and the cost of an answer 304. It also measures the labels that GitHub adds to a one-job runner, and the runner group of a repository.
 
 ## The tests
 
@@ -515,3 +581,11 @@ Tests hold the dispatcher:
 - After the requests stop to fail, each served job ends, and no machine and no registration stays.
 - After the pass that reads the stop switch on, no machine starts, and no machine stays.
 - No report and no failure text has a one-job configuration.
+
+Tests hold the GitHub source:
+
+- On the fake world, the GitHub source gives the view of the fake source at each pass. The pages of the fake API have 1 to 4 items.
+- A dispatcher on the GitHub source does each served job one time, and no step of a job of a fork starts.
+- Tests with written answers hold each refusal: a bad shape, a list that changed, a count that does not agree and an unexpected status.
+- No error text has a part of the body of an answer.
+- The source sends no request for a repository name that is not valid, and no request after the signal stops.
