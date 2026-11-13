@@ -390,7 +390,7 @@ A host gives the dispatcher two ports. `JobSource` is the source of the jobs, fo
 
 | Method | Work |
 | --- | --- |
-| `source.view(repository, runs, signal)` | It gives the runs of a repository that are not completed, and its runner registrations. |
+| `source.view(repository, runs, signal)` | It gives the runs of a repository that are not completed, and the runner registrations of its scope. |
 | `source.register(request, signal)` | It makes a runner registration for one job. It gives the id and the one-job configuration. |
 | `source.remove(repository, runnerId, signal)` | It removes a registration. It succeeds when the registration is not there. |
 | `provider.make(request, signal)` | It asks for a machine. It ends when the provider accepts the request, before the machine operates. |
@@ -399,6 +399,7 @@ A host gives the dispatcher two ports. `JobSource` is the source of the jobs, fo
 
 - A method throws when it cannot give a complete answer. The dispatcher then has no fact, and it does not decide from a part of a list.
 - A view has each registration of the dispatcher. A machine with no job whose runner is not in the view goes to `done`.
+- A view can name its `scope`, for example an organization. Two views with the same scope show the same registrations. A view with no scope has the registrations of its repository.
 - The provider keeps the record of each machine. A dispatcher that starts again reads the run of a machine from it.
 - A port reads its signal. The dispatcher cannot stop a request that does not read the signal.
 - A port limits the rate of its own requests. The dispatcher sends the requests of one pass together.
@@ -417,6 +418,8 @@ A host gives the dispatcher two ports. `JobSource` is the source of the jobs, fo
 - The plan asks for one machine for each queued job of a trusted run, less the machines of the run that wait for a job.
 - A run with more machines than queued jobs loses the machines with no connected runner, the newest first.
 - The plan removes each registration of the dispatcher that has no job and no machine that works.
+- The plan removes a registration of a scope one time, also when each view of the scope shows it.
+- In a named scope, the plan keeps the registration of a machine whose repository has no view in the pass. The life of the machine decides at a later pass.
 - The runs get machines in turn, the oldest run first, to the capacity.
 
 A queued job that gets no machine in a pass is in the list `waits`, with one of these reasons:
@@ -476,10 +479,11 @@ world.addRun(run, [{ labels: ["run-100-1"], duration: 3000 }]);
 - `jobs()`, `runners()`, `machines()`, `events()`, `peak()` and `secrets()` give the state of the world to a test.
 - `countingSuffix` gives the suffixes `00000000`, `00000001` and the subsequent numbers. Thus the names of a test are known.
 - `fakeGitHubApi(world, { pageSize })` is a fake REST API of GitHub on the world. Its lists have pages of `pageSize` items at most.
+- The option `organizations` names the organizations of the world. A runner of an organization takes a job of each repository of the organization.
 
 ## The GitHub source
 
-The entry `@mark1russell7/runner-dispatch/github` has a source on the REST API of GitHub. Its runners register on a repository.
+The entry `@mark1russell7/runner-dispatch/github` has a source on the REST API of GitHub. Its runners register on a repository or on an organization.
 
 ```ts
 import { createGitHubSource } from "@mark1russell7/runner-dispatch/github";
@@ -494,7 +498,7 @@ const source = createGitHubSource({ api });
 - It limits the rate of its requests, and it waits after a refusal for the rate.
 - It throws only when it gets no answer. Each status is an answer.
 
-The client is the next part of item R4. It goes to `@procedures/gh`, the package of the calls of the GitHub API.
+The client `createRestClient` goes to `@procedures/gh`, the package of the calls of the GitHub API.
 
 ### The requests of a view
 
@@ -526,6 +530,30 @@ Each list has pages of 100 items. A longer list needs one request for each page.
 - The text of an error has the status of the answer, and no part of its body. Thus a one-job configuration does not go to a log.
 - The source refuses a registration whose answer has a different runner name.
 
+### The runners of an organization
+
+```ts
+const source = createGitHubSource({ api, organization: "octo", runnerGroup: 3 });
+```
+
+- With the option `organization`, the runners register on the organization. Each served repository is a repository of the organization.
+- The runner requests then go to `/orgs/{organization}/actions/runners`. The runs stay the runs of each repository.
+- Each view then has the field `scope` with the value `organization:<name>`. `organizationScope(name)` gives it, with small letters.
+- The source refuses a repository of a different owner before it sends a request.
+- A runner of an organization can take a job of each repository that its runner group admits.
+- A job of a different run can name the run label of the runner. The check on the machine then refuses the job.
+
+### The check of a runner group
+
+`checkRunnerGroup(api, organization, runnerGroup, rules, signal)` reads a runner group of an organization and the repositories of the group. It gives `{ pass, problems }`.
+
+- The group names its repositories. GitHub gives such a group the visibility `selected`.
+- The group names each repository of `rules.served`, and no other repository.
+- The group admits no public repository. `rules.publicRepositories` set to `true` permits public repositories.
+- `judgeRunnerGroup(facts, rules)` gives the same decision from the answers, with no request.
+- A problem names a repository or a visibility from the answer. It has no other part of the answer.
+- Item R5 adds the program of the service. The program does the check before its first pass, and it stops when the check fails.
+
 ### The rate of the requests
 
 The REST API of GitHub has two limits that a dispatcher meets:
@@ -537,10 +565,13 @@ One pass for `r` repositories sends `G = 6r + o + n` requests `GET` when each li
 
 For example, 40 repositories with no open run give `G = 240`. A pass each 16 seconds then uses the full limit of 900 points a minute. Thus such a dispatcher needs a longer period, or a token for each group of repositories.
 
+With an organization, each view also lists the runners of the organization. Thus `G` stays the same. One list of the organization runners for each pass is an open point of the roadmap.
+
 ### What the source does not do yet
 
-- The source supports only runners of a repository. The runners of an organization are a later part of item R4.
-- A test with a real credential measures the smallest permissions and the cost of an answer 304. It also measures the labels that GitHub adds to a one-job runner, and the runner group of a repository.
+- A test with a real credential measures the smallest permissions and the cost of an answer 304.
+- The same test measures the labels that GitHub adds to a one-job runner, and the runner group of a repository.
+- It also measures if an organization on the Free plan can limit its default runner group to selected repositories.
 
 ## The tests
 

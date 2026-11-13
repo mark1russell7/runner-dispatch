@@ -1,5 +1,5 @@
 import { checkJob, type CheckRefusal, type CheckSettings, type JobEnvironment } from "./check.ts";
-import { PAGE_SIZE, RUN_LIST_LIMIT, type GitHubAnswer, type GitHubApi, type GitHubRequest } from "./github.ts";
+import { organizationScope, PAGE_SIZE, RUN_LIST_LIMIT, type GitHubAnswer, type GitHubApi, type GitHubRequest } from "./github.ts";
 import { isObject } from "./policy.ts";
 import type {
   JobSource,
@@ -52,6 +52,11 @@ export interface FakeWorldOptions {
   readonly times: WorldTimes;
   /** This function gives the fault of a request, or `null`. The target is a repository, or the name of a runner or of a machine. */
   readonly faults?: (request: WorldRequest, target: string) => WorldFault | null;
+  /**
+   * This list has each organization of the world. The source registers the runners of a repository of an organization on the organization.
+   * It registers each other runner on its repository. The default is no organization.
+   */
+  readonly organizations?: readonly string[];
 }
 
 /** This record is a job that a test adds to a run. */
@@ -92,10 +97,18 @@ export interface WorldRun {
 
 /** This record is one runner registration of a fake world. */
 export interface WorldRunner extends SourceRunner {
-  /** This field is the repository of the registration. */
-  readonly repository: string;
+  /** This field is the scope of the registration: a repository as `owner/name`, or an organization. */
+  readonly scope: string;
   /** This list has the labels of the runner. */
   readonly labels: readonly string[];
+}
+
+/** This record is the store of the runner registrations of a fake world, by scope. The faults of the world apply to each request. */
+export interface WorldRegistry {
+  /** This method makes a registration in a scope. It throws when the scope has a runner with the name. */
+  register(scope: string, name: string, labels: readonly string[], signal: StopSignal): Promise<RunnerRegistration>;
+  /** This method removes a registration of a scope. It succeeds when the registration is not there, and it throws for a runner with a job. */
+  remove(scope: string, runnerId: number, signal: StopSignal): Promise<void>;
 }
 
 /** This record is one event of a fake world, for the report of a test. */
@@ -127,7 +140,8 @@ export interface WorldEvent {
  * It does what GitHub and a hypervisor do, in the parts that a dispatcher reads:
  *
  * - A machine operates after the time `boot`. Its runner connects after the time `connect`, when its registration is there.
- * - A connected runner with no job takes a queued job of its repository when it has each label of the job.
+ * - A connected runner with no job takes a queued job of a repository of its scope when it has each label of the job.
+ *   The scope of a registration is its repository, or an organization of the world. An organization admits each of its repositories.
  * - At the start of a job, the machine does the check `checkJob` with its settings. A refused job ends, and no step starts.
  * - A runner does one job. The source removes its registration at the end of the job.
  * - A machine is not there after the time `destroy` from the request. Until then, it works.
@@ -150,6 +164,12 @@ export interface FakeWorld {
   machines(): readonly ProviderMachine[];
   /** This method gives each runner registration. */
   runners(): readonly WorldRunner[];
+  /** This method gives the scope where the source registers the runners of a repository: the repository, or its organization. */
+  scopeOf(repository: string): string;
+  /** This method gives each organization of the world. */
+  organizations(): readonly string[];
+  /** This field is the store of the registrations by scope. A fake REST API uses it. */
+  readonly registry: WorldRegistry;
   /** This method gives each run with its jobs, also a completed run. */
   runs(): readonly WorldRun[];
   /** This method gives each job, also the completed jobs. */
@@ -184,7 +204,7 @@ interface RunState {
 interface RunnerState {
   readonly runnerId: number;
   readonly name: string;
-  readonly repository: string;
+  readonly scope: string;
   readonly labels: readonly string[];
   readonly configuration: string;
   online: boolean;
@@ -266,6 +286,15 @@ export function fakeWorld(options: FakeWorldOptions): FakeWorld {
     const index = runners.indexOf(runner);
     if (index >= 0) runners.splice(index, 1);
   };
+  const organizations = [...(options.organizations ?? [])];
+  /** This function gives the organization of a repository, or `null` when its owner is not an organization of the world. */
+  const organizationOf = (repository: string): string | null => {
+    const owner = repository.slice(0, Math.max(repository.indexOf("/"), 0));
+    return organizations.find((each) => sameName(each, owner)) ?? null;
+  };
+  const scopeOf = (repository: string): string => organizationOf(repository) ?? repository;
+  /** This function tells if a runner of a scope can take a job of a repository. */
+  const admits = (scope: string, repository: string): boolean => sameName(scope, repository) || sameName(scope, organizationOf(repository));
 
   const finish = (runner: RunnerState, job: JobState, result: WorldJobResult): void => {
     job.status = "completed";
@@ -299,7 +328,7 @@ export function fakeWorld(options: FakeWorldOptions): FakeWorld {
       const machine = machines.get(runner.name);
       if (machine === undefined) continue;
       for (const run of runs) {
-        if (!sameName(run.run.repository, runner.repository)) continue;
+        if (!admits(runner.scope, run.run.repository)) continue;
         const job = run.jobs.find((each) => each.status === "queued" && each.labels.every((label) => runner.labels.includes(label)));
         if (job === undefined) continue;
         start(runner, job, run.run, machine.check);
@@ -320,6 +349,41 @@ export function fakeWorld(options: FakeWorldOptions): FakeWorld {
     disconnect(name);
   };
 
+  const registry: WorldRegistry = {
+    register(scope: string, name: string, labels: readonly string[], signal: StopSignal): Promise<RunnerRegistration> {
+      try {
+        const fault = begin("register", name, signal);
+        if (runners.some((runner) => runner.name === name && sameName(runner.scope, scope))) {
+          throw new Error("The scope has a runner with this name.");
+        }
+        ids += 1;
+        const configuration = `one-job-configuration-${ids}-${name}`;
+        secrets.push(configuration);
+        runners.push({ runnerId: ids, name, scope, labels: [...labels], configuration, online: false, job: null });
+        note("registered", name);
+        end("register", fault);
+        return Promise.resolve({ runnerId: ids, configuration });
+      } catch (error) {
+        return Promise.reject(error as Error);
+      }
+    },
+    remove(scope: string, runnerId: number, signal: StopSignal): Promise<void> {
+      try {
+        const runner = runners.find((each) => each.runnerId === runnerId && sameName(each.scope, scope));
+        const fault = begin("remove", runner?.name ?? String(runnerId), signal);
+        if (runner !== undefined) {
+          if (runner.job !== null) throw new Error("The runner has a job. The source does not remove it.");
+          unregister(runner);
+          note("removed", runner.name);
+        }
+        end("remove", fault);
+        return Promise.resolve();
+      } catch (error) {
+        return Promise.reject(error as Error);
+      }
+    },
+  };
+
   const source: JobSource = {
     view(repository: string, _runs: readonly RunKey[], signal: StopSignal): Promise<RepositoryView> {
       try {
@@ -327,6 +391,8 @@ export function fakeWorld(options: FakeWorldOptions): FakeWorld {
       } catch (error) {
         return Promise.reject(error as Error);
       }
+      const scope = scopeOf(repository);
+      const organization = organizationOf(repository);
       return Promise.resolve({
         runs: runs
           .filter((run) => sameName(run.run.repository, repository) && run.jobs.some((job) => job.status !== "completed"))
@@ -345,50 +411,14 @@ export function fakeWorld(options: FakeWorldOptions): FakeWorld {
             ),
           })),
         runners: runners
-          .filter((runner) => sameName(runner.repository, repository))
+          .filter((runner) => sameName(runner.scope, scope))
           .map((runner): SourceRunner => ({ runnerId: runner.runnerId, name: runner.name, online: runner.online, busy: runner.job !== null })),
+        ...(organization === null ? {} : { scope: organizationScope(organization) }),
       });
     },
-    register(request: RunnerRequest, signal: StopSignal): Promise<RunnerRegistration> {
-      try {
-        const fault = begin("register", request.name, signal);
-        if (runners.some((runner) => runner.name === request.name && sameName(runner.repository, request.repository))) {
-          throw new Error("The repository has a runner with this name.");
-        }
-        ids += 1;
-        const configuration = `one-job-configuration-${ids}-${request.name}`;
-        secrets.push(configuration);
-        runners.push({
-          runnerId: ids,
-          name: request.name,
-          repository: request.repository,
-          labels: [...request.labels],
-          configuration,
-          online: false,
-          job: null,
-        });
-        note("registered", request.name);
-        end("register", fault);
-        return Promise.resolve({ runnerId: ids, configuration });
-      } catch (error) {
-        return Promise.reject(error as Error);
-      }
-    },
-    remove(repository: string, runnerId: number, signal: StopSignal): Promise<void> {
-      try {
-        const runner = runners.find((each) => each.runnerId === runnerId && sameName(each.repository, repository));
-        const fault = begin("remove", runner?.name ?? String(runnerId), signal);
-        if (runner !== undefined) {
-          if (runner.job !== null) throw new Error("The runner has a job. The source does not remove it.");
-          unregister(runner);
-          note("removed", runner.name);
-        }
-        end("remove", fault);
-        return Promise.resolve();
-      } catch (error) {
-        return Promise.reject(error as Error);
-      }
-    },
+    register: (request: RunnerRequest, signal: StopSignal): Promise<RunnerRegistration> =>
+      registry.register(scopeOf(request.repository), request.name, request.labels, signal),
+    remove: (repository: string, runnerId: number, signal: StopSignal): Promise<void> => registry.remove(scopeOf(repository), runnerId, signal),
   };
 
   const provider: MachineProvider = {
@@ -508,11 +538,14 @@ export function fakeWorld(options: FakeWorldOptions): FakeWorld {
       runners.map((runner) => ({
         runnerId: runner.runnerId,
         name: runner.name,
-        repository: runner.repository,
+        scope: runner.scope,
         labels: [...runner.labels],
         online: runner.online,
         busy: runner.job !== null,
       })),
+    scopeOf,
+    organizations: (): readonly string[] => [...organizations],
+    registry,
     runs: (): readonly WorldRun[] => runs.map((run) => ({ run: { ...run.run }, jobs: run.jobs.map(jobOf) })),
     jobs: (): readonly WorldJob[] => runs.flatMap((run) => run.jobs.map(jobOf)),
     peak: (): number => peak,
@@ -592,6 +625,7 @@ const runnerJson = (runner: { runnerId: number; name: string; online: boolean; b
 });
 
 const ROUTE = /^\/repos\/([^/]+\/[^/]+)\/actions\/(.+)$/;
+const ORGANIZATION_ROUTE = /^\/orgs\/([^/]+)\/actions\/(.+)$/;
 const RUN_ROUTE = /^runs\/(\d+)$/;
 const JOBS_ROUTE = /^runs\/(\d+)\/attempts\/(\d+)\/jobs$/;
 const RUNNER_ROUTE = /^runners\/(\d+)$/;
@@ -602,8 +636,9 @@ const RUNNER_ROUTE = /^runners\/(\d+)$/;
  *
  * - A list of runs has the newest try of each run, with the newest run first. It has 1,000 runs at most.
  * - The status of a run comes from its jobs. Each job is completed, each job is queued, or the run is `in_progress`.
- * - A request for a runner uses the source of the world. Thus the faults of the world apply to it.
- * - The API answers 409 for a runner name that the repository has and 404 for a runner that is not there. It answers 422 for a busy runner.
+ * - The runners of a repository and of an organization of the world are separate scopes, as on GitHub. The API answers 404 for an organization that the world does not have.
+ * - A request for a runner uses the registry of the world. Thus the faults of the world apply to it.
+ * - The API answers 409 for a runner name that the scope has and 404 for a runner that is not there. It answers 422 for a busy runner.
  *
  * @param world - The fake world
  * @param options - The size of a page and the faults
@@ -635,13 +670,43 @@ export function fakeGitHubApi(world: FakeWorld, options: FakeGitHubOptions = {})
     }
     return [...found.values()].sort((a, b) => b.run.runId - a.run.runId);
   };
-  const runnersOf = (repository: string) =>
+  const runnersOf = (scope: string) =>
     world
       .runners()
-      .filter((runner) => sameName(runner.repository, repository))
+      .filter((runner) => sameName(runner.scope, scope))
       .sort((a, b) => a.runnerId - b.runnerId);
 
+  /** This function answers a request for the runners of a scope, or gives `null` for a request that is not one. */
+  const runnersRoute = async (scope: string, rest: string, request: GitHubRequest, signal: StopSignal): Promise<GitHubAnswer | null> => {
+    const { method } = request;
+    if (method === "GET" && rest === "runners") return page(request, "runners", runnersOf(scope).map(runnerJson));
+    if (method === "POST" && rest === "runners/generate-jitconfig") {
+      const body: Record<string, unknown> = isObject(request.body) ? request.body : {};
+      const { name, labels } = body;
+      if (typeof name !== "string" || !Array.isArray(labels) || !labels.every((label) => typeof label === "string")) return answer(422);
+      if (runnersOf(scope).some((runner) => runner.name === name)) return answer(409);
+      const made = await world.registry.register(scope, name, labels as string[], signal);
+      const runner = { runnerId: made.runnerId, name, online: false, busy: false, labels: labels as string[] };
+      return answer(201, { runner: runnerJson(runner), encoded_jit_config: made.configuration });
+    }
+    const runner = RUNNER_ROUTE.exec(rest);
+    if (method === "DELETE" && runner !== null) {
+      const found = runnersOf(scope).find((each) => each.runnerId === Number(runner[1]));
+      if (found === undefined) return answer(404);
+      if (found.busy) return answer(422);
+      await world.registry.remove(scope, found.runnerId, signal);
+      return answer(204);
+    }
+    return null;
+  };
+
   const route = async (request: GitHubRequest, signal: StopSignal): Promise<GitHubAnswer> => {
+    const owned = ORGANIZATION_ROUTE.exec(request.path);
+    if (owned !== null) {
+      const organization = world.organizations().find((each) => sameName(each, owned[1]));
+      if (organization === undefined) return answer(404);
+      return (await runnersRoute(organization, owned[2] as string, request, signal)) ?? answer(404);
+    }
     const match = ROUTE.exec(request.path);
     if (match === null) return answer(404);
     const repository = match[1] as string;
@@ -666,25 +731,7 @@ export function fakeGitHubApi(world: FakeWorld, options: FakeGitHubOptions = {})
         .find((each) => sameName(each.run.repository, repository) && each.run.runId === Number(jobs[1]) && each.run.runAttempt === Number(jobs[2]));
       return found === undefined ? answer(404) : page(request, "jobs", [...found.jobs].sort((a, b) => a.jobId - b.jobId).map(jobJson));
     }
-    if (method === "GET" && rest === "runners") return page(request, "runners", runnersOf(repository).map(runnerJson));
-    if (method === "POST" && rest === "runners/generate-jitconfig") {
-      const body: Record<string, unknown> = isObject(request.body) ? request.body : {};
-      const { name, labels } = body;
-      if (typeof name !== "string" || !Array.isArray(labels) || !labels.every((label) => typeof label === "string")) return answer(422);
-      if (runnersOf(repository).some((runner) => runner.name === name)) return answer(409);
-      const made = await world.source.register({ repository, name, labels: labels as string[] }, signal);
-      const runner = { runnerId: made.runnerId, name, online: false, busy: false, labels: labels as string[] };
-      return answer(201, { runner: runnerJson(runner), encoded_jit_config: made.configuration });
-    }
-    const runner = RUNNER_ROUTE.exec(rest);
-    if (method === "DELETE" && runner !== null) {
-      const found = runnersOf(repository).find((each) => each.runnerId === Number(runner[1]));
-      if (found === undefined) return answer(404);
-      if (found.busy) return answer(422);
-      await world.source.remove(repository, found.runnerId, signal);
-      return answer(204);
-    }
-    return answer(404);
+    return (await runnersRoute(repository, rest, request, signal)) ?? answer(404);
   };
 
   return {

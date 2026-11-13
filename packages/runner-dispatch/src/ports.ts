@@ -32,7 +32,7 @@ export interface SourceRun {
   readonly jobs: readonly SourceJob[];
 }
 
-/** This record is one runner registration of a repository. */
+/** This record is one runner registration of a repository or of an organization. */
 export interface SourceRunner {
   /** This field is the id of the registration. */
   readonly runnerId: number;
@@ -48,13 +48,18 @@ export interface SourceRunner {
 export interface RepositoryView {
   /** This list has each run of the repository that is not completed. */
   readonly runs: readonly SourceRun[];
-  /** This list has each runner registration of the repository. */
+  /** This list has each runner registration of the scope of the repository. */
   readonly runners: readonly SourceRunner[];
+  /**
+   * This field names the scope of the runner registrations, for example an organization. When it is absent, the scope is the repository.
+   * Two views with the same scope show the same registrations. The dispatcher compares two scopes as texts.
+   */
+  readonly scope?: string;
 }
 
 /** This record is the request for a runner registration that does one job. */
 export interface RunnerRequest {
-  /** This field is the repository of the runner, as `owner/name`. */
+  /** This field is the repository of the run of the runner, as `owner/name`. The source registers the runner in the scope of this repository. */
   readonly repository: string;
   /** This field is the name of the runner. */
   readonly name: string;
@@ -85,7 +90,7 @@ export interface JobSource<Signal extends StopSignal = StopSignal> {
   view(repository: string, runs: readonly RunKey[], signal: Signal): Promise<RepositoryView>;
   /** This method makes a runner registration that does one job. */
   register(request: RunnerRequest, signal: Signal): Promise<RunnerRegistration>;
-  /** This method removes a runner registration. It succeeds when the registration is not there. */
+  /** This method removes a runner registration of the scope of a repository. It succeeds when the registration is not there. */
   remove(repository: string, runnerId: number, signal: Signal): Promise<void>;
 }
 

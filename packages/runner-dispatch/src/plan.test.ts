@@ -603,6 +603,91 @@ describe("plan: the runner registrations", () => {
     expect(result.steps).toEqual([]);
     expect(result.removals).toEqual([{ repository: REPO, runnerId: 3, name: A }]);
   });
+
+  it("removes a registration with the name of a machine of a different served repository that the pass did not see", () => {
+    const rules: TrustRules = { ...RULES, repositories: [REPO, OTHER] };
+    const there = { repository: OTHER };
+    const views = [
+      { repository: REPO, view: { runs: [], runners: [runner(A, { runnerId: 3 })] } },
+      { repository: OTHER, view: null },
+    ];
+    const result = plan(memory(life(A, "registered", 0, there)), { now: 0, stopped: false, views, machines: [listed(A, "operating", there)] }, { ...CONFIG, rules });
+    expect(result.removals).toEqual([{ repository: REPO, runnerId: 3, name: A }]);
+  });
+
+  it("removes a registration one time when two views name one repository with a different case", () => {
+    const runners = [runner(D, { runnerId: 4 })];
+    const views = [
+      { repository: REPO, view: { runs: [], runners } },
+      { repository: REPO.toUpperCase(), view: { runs: [], runners } },
+    ];
+    expect(plan(EMPTY_STATE, { now: 0, stopped: false, views, machines: [] }, CONFIG).removals).toEqual([{ repository: REPO, runnerId: 4, name: D }]);
+  });
+
+  describe("in a named scope, for example an organization", () => {
+    const rules: TrustRules = { ...RULES, repositories: [REPO, OTHER] };
+    const there = { repository: OTHER };
+    const SCOPE = "organization:octo";
+    const config = { ...CONFIG, rules };
+    const facts = (views: Observation["views"], machines: Observation["machines"] = []): Observation => ({ now: 0, stopped: false, views, machines });
+
+    it("removes a registration of the scope one time, also when each view of the scope shows it", () => {
+      const runners = [runner(D, { runnerId: 4 })];
+      const views = [
+        { repository: REPO, view: { runs: [], runners, scope: SCOPE } },
+        { repository: OTHER, view: { runs: [], runners, scope: SCOPE } },
+      ];
+      expect(plan(EMPTY_STATE, facts(views), config).removals).toEqual([{ repository: REPO, runnerId: 4, name: D }]);
+      // Two scopes with the same id of a registration are two registrations.
+      const split = [views[0], { repository: OTHER, view: { runs: [], runners } }] as Observation["views"];
+      expect(plan(EMPTY_STATE, facts(split), config).removals).toEqual([
+        { repository: REPO, runnerId: 4, name: D },
+        { repository: OTHER, runnerId: 4, name: D },
+      ]);
+      // A named scope with the text of a repository name is not the scope of that repository.
+      const lookalike = [{ repository: REPO, view: { runs: [], runners, scope: OTHER } }, split[1]] as Observation["views"];
+      expect(plan(EMPTY_STATE, facts(lookalike), config).removals).toEqual([
+        { repository: REPO, runnerId: 4, name: D },
+        { repository: OTHER, runnerId: 4, name: D },
+      ]);
+    });
+
+    it("removes the registration of a machine of a different repository of the scope when the machine has no more work", () => {
+      const runners = [runner(A, { runnerId: 5 })];
+      const views = [
+        { repository: REPO, view: { runs: [], runners, scope: SCOPE } },
+        { repository: OTHER, view: { runs: [], runners, scope: SCOPE } },
+      ];
+      const machines = [listed(A, "operating", there)];
+      expect(plan(memory(life(A, "done", 0, there)), facts(views, machines), config).removals).toEqual([{ repository: REPO, runnerId: 5, name: A }]);
+      const waiting = [run([job("queued", { ...there })], 100, { ...there, headRepository: OTHER })];
+      const working = [views[0], { repository: OTHER, view: { runs: waiting, runners, scope: SCOPE } }] as Observation["views"];
+      expect(plan(memory(life(A, "registered", 0, there)), facts(working, machines), config).removals).toEqual([]);
+    });
+
+    it("keeps the registration of a machine when the pass did not see the repository of the machine", () => {
+      const views = [
+        { repository: REPO, view: { runs: [], runners: [runner(A, { runnerId: 5 })], scope: SCOPE } },
+        { repository: OTHER, view: null },
+      ];
+      const machines = [listed(A, "operating", there)];
+      expect(plan(memory(life(A, "done", 0, there)), facts(views, machines), config).removals).toEqual([]);
+      // The registration of a machine of a repository that the rules do not serve stays also, until the life of the machine ends.
+      const stray = { repository: "octo/other" };
+      const alone = [views[0]] as Observation["views"];
+      expect(plan(memory(life(A, "done", 0, stray)), facts(alone, [listed(A, "operating", stray)]), config).removals).toEqual([]);
+      expect(plan(EMPTY_STATE, facts(alone, []), config).removals).toEqual([{ repository: REPO, runnerId: 5, name: A }]);
+    });
+
+    it("removes a registration of the scope with the name of a machine of a different scope", () => {
+      const views = [
+        { repository: REPO, view: { runs: [], runners: [runner(A, { runnerId: 5 })], scope: SCOPE } },
+        { repository: OTHER, view: { runs: [], runners: [] } },
+      ];
+      const machines = [listed(A, "operating", there)];
+      expect(plan(memory(life(A, "registered", 0, there)), facts(views, machines), config).removals).toEqual([{ repository: REPO, runnerId: 5, name: A }]);
+    });
+  });
 });
 
 describe("plan: each sequence of facts", () => {

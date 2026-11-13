@@ -182,7 +182,7 @@ describe("a dispatcher on a fake world: one job", () => {
       lives: [{ machine: { name: M0, size: "small", repository: REPO, runId: 100, runAttempt: 1 }, life: { state: "asked", at: 0, fired: 0 } }],
       cut: false,
     });
-    expect(at.world.runners()).toEqual([{ runnerId: 2, name: M0, repository: REPO, labels: ["run-100-1", "small"], online: true, busy: true }]);
+    expect(at.world.runners()).toEqual([{ runnerId: 2, name: M0, scope: REPO, labels: ["run-100-1", "small"], online: true, busy: true }]);
 
     const second = await at.turn();
     expect(second.steps.map((step) => [step.transition, step.at])).toEqual([
