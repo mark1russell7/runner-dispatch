@@ -211,6 +211,12 @@ importers:
       '@mark1russell7/service':
         specifier: ^0.8.6
         version: 0.8.6(@opentelemetry/api@1.10.0)(ws@8.22.2)(zod@4.6.7)
+      '@mark1russell7/text':
+        specifier: ^0.0.4
+        version: 0.0.4
+      '@procedures/gh':
+        specifier: ^0.55.1
+        version: 0.55.1(@opentelemetry/api@1.10.0)(ws@8.22.2)
       '@procedures/http':
         specifier: ^0.55.0
         version: 0.55.0
@@ -600,6 +606,10 @@ packages:
     resolution: {integrity: sha512-m1aIB8X+PDekktzr1fYOp1/7gvlh9iL/2M7ktj/GnmPmVrWin0rTADgTm00dKFdWFRzXraCUYkjyCl3jQZHEVg==}
     engines: {node: '>=22.12'}
 
+  '@mark1russell7/text@0.0.4':
+    resolution: {integrity: sha512-QzWuzlzE2wzCcfQ2Htfs2sHZVstJZ9UbNwDVc08aXtNRgdU635WrWyybgFTn/cLud0EPuvti4jHeR8mgZh9mdg==}
+    engines: {node: '>=22.12'}
+
   '@opentelemetry/api@1.10.0':
     resolution: {integrity: sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ==}
     engines: {node: '>=8.0.0'}
@@ -616,8 +626,29 @@ packages:
       express:
         optional: true
 
+  '@procedures/client@0.55.1':
+    resolution: {integrity: sha512-MMR96vk3VUK5r4bkDzaoxYHl6CE2UHTn7B6Uw2tOa/R6thQeVLPfHvLDT8m+mDR1vbTZj6XM4FNGEOFlC3c8PA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      express: ^4.0.0 || ^5.0.0
+    peerDependenciesMeta:
+      express:
+        optional: true
+
+  '@procedures/gh@0.55.1':
+    resolution: {integrity: sha512-i8GI24dRck2p2t1ErxCrK3VD/tJKm9P548nkqB5hkwedIiZyZugZ5mpOyS5PM/RcAbkK2K6r5SLeKQTdJ07DRQ==}
+    engines: {node: '>=22'}
+
   '@procedures/http@0.55.0':
     resolution: {integrity: sha512-17h+w2pwflwgRcXkhc1EZqi9gpSsaQnA8f+IJIhxtKxuY4fLcYiWoMxqvFT6BUru0IiZtIu93alwf8jBI+lFbw==}
+    engines: {node: '>=22'}
+
+  '@procedures/http@0.55.1':
+    resolution: {integrity: sha512-vx/ajWU5yLGywEoWNKX4Jc+TmJBcjQsQBvmDCLrjyVzXpTpQWs1Q34PwhIs1S4emiX4v2kIBEVMrb+1z2oeuvw==}
+    engines: {node: '>=22'}
+
+  '@procedures/shell@0.55.1':
+    resolution: {integrity: sha512-fmaZx50PLXe2Br9xrw0U2iyTEVwCTntGN6HJaEHX7cBsSffUNkYxC9OpKvophMm0qgOlcvFg/o1bhpH7Cm0KEw==}
     engines: {node: '>=22'}
 
   '@publint/pack@0.1.7':
@@ -1682,6 +1713,8 @@ snapshots:
 
   '@mark1russell7/text@0.0.2': {}
 
+  '@mark1russell7/text@0.0.4': {}
+
   '@opentelemetry/api@1.10.0': {}
 
   '@oxc-project/types@0.156.0': {}
@@ -1706,9 +1739,76 @@ snapshots:
       - pg
       - utf-8-validate
 
+  '@procedures/client@0.55.1':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.4(zod@4.6.7)
+      '@mark1russell7/coeval': 0.29.0(zod@4.6.7)
+      '@mark1russell7/collections': 0.10.0(zod@4.6.7)
+      '@mark1russell7/quantity': 0.3.5(zod@4.6.7)
+      '@mark1russell7/service': 0.8.6(@opentelemetry/api@1.10.0)(ws@8.22.2)(zod@4.6.7)
+      '@opentelemetry/api': 1.10.0
+      '@types/ws': 8.18.2
+      ws: 8.22.2
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/gh@0.55.1(@opentelemetry/api@1.10.0)(ws@8.22.2)':
+    dependencies:
+      '@mark1russell7/service': 0.8.6(@opentelemetry/api@1.10.0)(ws@8.22.2)(zod@4.6.7)
+      '@procedures/client': 0.55.1
+      '@procedures/http': 0.55.1
+      '@procedures/shell': 0.55.1
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - '@opentelemetry/api'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+      - ws
+
   '@procedures/http@0.55.0':
     dependencies:
       '@procedures/client': 0.55.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/http@0.55.1':
+    dependencies:
+      '@procedures/client': 0.55.1
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/shell@0.55.1':
+    dependencies:
+      '@procedures/client': 0.55.1
       zod: 4.6.7
     transitivePeerDependencies:
       - '@grpc/grpc-js'

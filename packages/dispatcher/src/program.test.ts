@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
-import type { GitHubAnswer, GitHubApi, GitHubRequest } from "@mark1russell7/runner-dispatch/github";
-import type { ProxmoxApi } from "@mark1russell7/runner-dispatch/proxmox";
-import { PROXMOX_API_PATH, type ProxmoxExchange, type ProxmoxTransport } from "@mark1russell7/runner-dispatch/proxmox-client";
+import type { GitHubApi } from "@mark1russell7/runner-dispatch/github";
+import type { ProxmoxTransport } from "@mark1russell7/runner-dispatch/proxmox-client";
 import { countingSuffix, fakeGitHubApi, fakeProxmox, fakeWorld, type FakeProxmox, type FakeWorld } from "@mark1russell7/runner-dispatch/testing";
 import { UNIT_BOUND_RULE, type Lifecycle } from "@mark1russell7/service";
 import { nodeHostPorts, probeOnce } from "@mark1russell7/service/host";
@@ -19,28 +18,8 @@ import {
   type LogLine,
   type Program,
   type ProgramPorts,
-  type Secrets,
 } from "./program.ts";
-
-const REPO = "octo/app";
-const PVE = "https://pve.example:8006";
-const PROXMOX_TOKEN = "dispatch@pve!runners=0123-secret-of-proxmox";
-const GITHUB_TOKEN = "ghp_secret-of-github";
-const SECRETS: Secrets = { github: GITHUB_TOKEN, proxmox: PROXMOX_TOKEN };
-
-/** This function gives a valid document of a program, with the changes of a test. */
-const doc = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
-  format: "dispatcher-program/1",
-  rules: { format: "trust-rules/1", repositories: [REPO], events: ["push"], actors: ["octo"] },
-  times: { format: "machine-times/1", make: 60, register: 60, idle: 30, job: 600, retry: 5, retryMax: 40, pass: 10 },
-  settings: { format: "dispatch-settings/1", prefix: "rd", capacity: 2, sizes: ["small"], standard: "small" },
-  loop: { sleep: 5, bound: 2, retry: 1, retryMax: 2, close: 0.5 },
-  profile: "local",
-  stop: "/run/runner-dispatch/stop",
-  github: {},
-  proxmox: { url: PVE, pool: "runners", sizes: { small: { node: "pve1", template: 9000, cores: 2, memory: 4096 } } },
-  ...over,
-});
+import { doc, GITHUB_TOKEN, groupApi, noProxmox, ORGANIZATION, PROXMOX_TOKEN, PVE, REPO, SECRETS, settle, wireOf } from "./fixtures.ts";
 
 const programOf = (over: Record<string, unknown> = {}): Program => {
   const read = parseProgram(doc(over));
@@ -168,55 +147,6 @@ describe("livenessUrl", () => {
   });
 });
 
-/** This function makes a transport on a fake Proxmox VE. It refuses a wrong token, as Proxmox VE does. */
-const wireOf =
-  (api: ProxmoxApi, sent: ProxmoxExchange[] = []): ProxmoxTransport<AbortSignal> =>
-  async (exchange, signal) => {
-    sent.push(exchange);
-    const url = new URL(exchange.url);
-    if (url.origin !== new URL(PVE).origin || !url.pathname.startsWith(`${PROXMOX_API_PATH}/`)) throw new Error("The exchange went to another place.");
-    if (exchange.headers["authorization"] !== `PVEAPIToken=${PROXMOX_TOKEN}`) return { status: 401, statusText: "authentication failure", body: '{"data":null}' };
-    const form = exchange.body === undefined ? url.searchParams : new URLSearchParams(exchange.body);
-    const path = url.pathname
-      .slice(PROXMOX_API_PATH.length)
-      .split("/")
-      .map((part) => decodeURIComponent(part))
-      .join("/");
-    const answer = await api.request({ method: exchange.method, path, parameters: Object.fromEntries(form) }, signal);
-    return { status: answer.status, statusText: answer.message, body: JSON.stringify({ data: answer.data }) };
-  };
-
-/** This function makes a GitHub API that answers from a script, and keeps each request. */
-const scripted = (answer: (request: GitHubRequest) => GitHubAnswer) => {
-  const requests: GitHubRequest[] = [];
-  const api: GitHubApi<AbortSignal> = {
-    request: (request) => {
-      requests.push(request);
-      return Promise.resolve(answer(request));
-    },
-  };
-  return { api, requests };
-};
-
-const group = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
-  id: 3,
-  name: "home",
-  visibility: "selected",
-  default: false,
-  allows_public_repositories: false,
-  ...over,
-});
-
-/** This function gives the GitHub API of a runner group 3 of the organization octo, with the repositories of a test. */
-const groupApi = (over: Record<string, unknown> = {}, repositories: readonly string[] = [REPO]) =>
-  scripted((request) => {
-    if (request.path === "/orgs/octo/actions/runner-groups/3") return { status: 200, body: group(over) };
-    if (request.path === "/orgs/octo/actions/runner-groups/3/repositories") {
-      return { status: 200, body: { total_count: repositories.length, repositories: repositories.map((full_name, id) => ({ id, full_name, private: true })) } };
-    }
-    return { status: 404, body: null };
-  });
-
 /** This function gives the ports of a test, with a list of the log lines. */
 const portsOf = (api: GitHubApi<AbortSignal>, transport: ProxmoxTransport<AbortSignal>, stop = false) => {
   const lines: LogLine[] = [];
@@ -234,8 +164,6 @@ const portsOf = (api: GitHubApi<AbortSignal>, transport: ProxmoxTransport<AbortS
   return { ports, lines, opened };
 };
 
-const ORGANIZATION = { github: { organization: "octo", runnerGroup: 3 } };
-const noProxmox: ProxmoxTransport<AbortSignal> = () => Promise.reject(new Error("The test sends nothing to Proxmox VE."));
 
 describe("prepareProgram", () => {
   it("checks the runner group before each other part, then declares the service and finds no violated rule", async () => {
@@ -322,8 +250,6 @@ interface Run {
   readonly life: Lifecycle;
   advance(ms: number): Promise<void>;
 }
-
-const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /** This function gives a port that the system has free at this time. */
 const freePort = (): Promise<number> =>
