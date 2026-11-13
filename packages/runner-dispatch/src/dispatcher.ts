@@ -236,9 +236,9 @@ export function createDispatcher<Signal extends StopSignal = StopSignal>(options
       }
     };
     const taken = new Set(state.lives.map((each) => each.machine.name));
-    const make = async (asked: PlannedMake): Promise<void> => {
+    const make = async (request: PlannedMake): Promise<void> => {
       if (!open()) return;
-      const { run, size } = asked;
+      const { run, size } = request;
       const label = runLabel(run);
       let name: string;
       try {

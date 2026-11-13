@@ -91,7 +91,7 @@ export interface MeasureState {
   readonly machines: readonly MachineMeasure[];
   /** This list has the record of each job that is not complete. */
   readonly jobs: readonly JobMeasure[];
-  /** This list has the key of each complete job that a view still shows: the repository in lower case, a space and the id of the job. */
+  /** This list has the key of each complete job that a view still shows. A key is the repository in lower case, a space and the job id. */
   readonly closed: readonly string[];
 }
 
