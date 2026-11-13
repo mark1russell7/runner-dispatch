@@ -12,6 +12,9 @@
     "dev": "vite",
     "build": "vite build"
   },
+  "dependencies": {
+    "@mark1russell7/runner-dispatch": "workspace:*"
+  },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",
     "@mark1russell7/site-pages": "^0.4.6",
