@@ -10,7 +10,7 @@ import type {
   SourceRunner,
   StopSignal,
 } from "./ports.ts";
-import { isId, sameName, type RunKey, type RunRecord } from "./records.ts";
+import { foldName, isId, sameName, type RunKey, type RunRecord } from "./records.ts";
 
 /** This type is the method of a request to the REST API of GitHub. */
 export type GitHubMethod = "GET" | "POST" | "DELETE";
@@ -52,8 +52,13 @@ export interface GitHubApi<Signal extends StopSignal = StopSignal> {
 export interface GitHubSourceOptions<Signal extends StopSignal = StopSignal> {
   /** This field is the client of the REST API. */
   readonly api: GitHubApi<Signal>;
-  /** This field is the id of the runner group of each new runner. The default group of a repository has the id 1. */
+  /** This field is the id of the runner group of each new runner. The default group of a repository or of an organization has the id 1. */
   readonly runnerGroup?: number;
+  /**
+   * This field names the organization of the runners. The source then registers each runner on the organization, and each repository must be a repository of it.
+   * When it is absent, the source registers each runner on the repository of its run.
+   */
+  readonly organization?: string;
 }
 
 /** This list has each status of a run that is not completed. The source lists the runs of each status. */
@@ -92,6 +97,57 @@ function repositoryPath(repository: string): string {
     throw new TypeError(`The repository ${show(repository)} is not a name as owner/name.`);
   }
   return `/repos/${repository}`;
+}
+
+/** This pattern is the name of an organization of GitHub. */
+const ORGANIZATION = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+
+/**
+ * This function gives the scope of the runners of an organization, as the view of a GitHub source names it.
+ *
+ * @param organization - The name of the organization
+ * @returns The scope, as `organization:<name>` with the name in small letters
+ */
+export function organizationScope(organization: string): string {
+  return `organization:${foldName(organization)}`;
+}
+/** This function sends one request. It stops before the request when the signal is aborted. */
+function sendTo<Signal extends StopSignal>(api: GitHubApi<Signal>, request: GitHubRequest, signal: Signal): Promise<GitHubAnswer> {
+  if (signal.aborted) return Promise.reject(new Error(`The signal stopped the request ${request.method} ${request.path}.`));
+  return api.request(request, signal);
+}
+
+/**
+ * This function reads each page of a list. It throws when the list changes between its pages, or when the items and the count differ.
+ * The text of an error does not have the body of an answer.
+ */
+async function listAll<Signal extends StopSignal>(
+  api: GitHubApi<Signal>,
+  path: string,
+  query: Readonly<Record<string, string>>,
+  key: string,
+  signal: Signal,
+  limit: number,
+): Promise<unknown[]> {
+  const items: unknown[] = [];
+  let total: number | null = null;
+  for (let page = 1; ; page += 1) {
+    const answer = await sendTo(api, { method: "GET", path, query: { ...query, per_page: String(PAGE_SIZE), page: String(page) }, body: null }, signal);
+    if (answer.status !== 200) throw new Error(`GitHub answered the list ${path} with the status ${showStatus(answer.status)}.`);
+    const count = field(answer.body, "total_count");
+    const part = field(answer.body, key);
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || !Array.isArray(part)) {
+      throw new Error(`The answer to the list ${path} has no count or no field ${key}.`);
+    }
+    if (total === null) total = count;
+    if (count !== total) throw new Error(`The list ${path} changed between its pages.`);
+    if (total > limit) throw new Error(`The list ${path} has ${total} items, and GitHub gives ${limit} at most.`);
+    items.push(...(part as unknown[]));
+    if (items.length >= total) break;
+    if (part.length === 0) throw new Error(`The list ${path} ended before its count of ${total} items.`);
+  }
+  if (items.length !== total) throw new Error(`The list ${path} has ${items.length} items, and its count is ${total}.`);
+  return items;
 }
 
 /** This record is a run of a list, with its status. */
@@ -191,60 +247,44 @@ function readRunner(value: unknown): SourceRunner {
 }
 
 /**
- * This function makes a source of jobs on the REST API of GitHub, for runners that register on a repository.
+ * This function makes a source of jobs on the REST API of GitHub, for runners that register on a repository or on an organization.
  * Its view uses one list of runs for each open status and a request for each named run that is not in the lists.
- * It then reads the jobs of each open run and the runners.
+ * It then reads the jobs of each open run and the runners of the scope.
+ * With an organization, each view lists the runners of the organization, and it has the scope `organizationScope(organization)`.
  *
- * @param options - The client of the REST API and the runner group
+ * @param options - The client of the REST API, the runner group and the organization
  * @returns The source
- * @throws RangeError when the runner group is not a whole number from 1
+ * @throws RangeError when the runner group is not a whole number from 1, or the organization is not a name of GitHub
  */
 export function createGitHubSource<Signal extends StopSignal = StopSignal>(options: GitHubSourceOptions<Signal>): JobSource<Signal> {
-  const { api } = options;
+  const { api, organization } = options;
   const runnerGroup = options.runnerGroup ?? 1;
   if (!isId(runnerGroup)) throw new RangeError("The runner group of a GitHub source is not a whole number from 1.");
-
-  /** This function sends one request. It stops before the request when the signal is aborted. */
-  const send = (request: GitHubRequest, signal: Signal): Promise<GitHubAnswer> => {
-    if (signal.aborted) return Promise.reject(new Error(`The signal stopped the request ${request.method} ${request.path}.`));
-    return api.request(request, signal);
-  };
+  if (organization !== undefined && (typeof organization !== "string" || !ORGANIZATION.test(organization))) {
+    throw new RangeError(`The organization ${show(organization)} of a GitHub source is not a name of GitHub.`);
+  }
 
   /**
-   * This function reads each page of a list. It throws when the list changes between its pages, or when the items and the count differ.
-   * The text of an error does not have the body of an answer.
+   * This function gives the path of the runners of a repository: the path of the repository, or the path of the organization.
+   * It throws when the repository is not a repository of the organization.
    */
-  const list = async (
-    path: string,
-    query: Readonly<Record<string, string>>,
-    key: string,
-    signal: Signal,
-    limit: number,
-  ): Promise<unknown[]> => {
-    const items: unknown[] = [];
-    let total: number | null = null;
-    for (let page = 1; ; page += 1) {
-      const answer = await send({ method: "GET", path, query: { ...query, per_page: String(PAGE_SIZE), page: String(page) }, body: null }, signal);
-      if (answer.status !== 200) throw new Error(`GitHub answered the list ${path} with the status ${showStatus(answer.status)}.`);
-      const count = field(answer.body, "total_count");
-      const part = field(answer.body, key);
-      if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || !Array.isArray(part)) {
-        throw new Error(`The answer to the list ${path} has no count or no field ${key}.`);
-      }
-      if (total === null) total = count;
-      if (count !== total) throw new Error(`The list ${path} changed between its pages.`);
-      if (total > limit) throw new Error(`The list ${path} has ${total} items, and GitHub gives ${limit} at most.`);
-      items.push(...(part as unknown[]));
-      if (items.length >= total) break;
-      if (part.length === 0) throw new Error(`The list ${path} ended before its count of ${total} items.`);
+  const runnersPath = (repository: string): string => {
+    const base = repositoryPath(repository);
+    if (organization === undefined) return `${base}/actions/runners`;
+    if (!sameName(repository.slice(0, repository.indexOf("/")), organization)) {
+      throw new RangeError(`The repository ${show(repository)} is not a repository of the organization ${show(organization)}.`);
     }
-    if (items.length !== total) throw new Error(`The list ${path} has ${items.length} items, and its count is ${total}.`);
-    return items;
+    return `/orgs/${organization}/actions/runners`;
   };
+
+  const send = (request: GitHubRequest, signal: Signal): Promise<GitHubAnswer> => sendTo(api, request, signal);
+  const list = (path: string, query: Readonly<Record<string, string>>, key: string, signal: Signal, limit: number): Promise<unknown[]> =>
+    listAll(api, path, query, key, signal, limit);
 
   return {
     async view(repository: string, runs: readonly RunKey[], signal: Signal): Promise<RepositoryView> {
       const base = repositoryPath(repository);
+      const runnersAt = runnersPath(repository);
       const open = new Map<number, RunRecord>();
       const keep = (listed: ListedRun): void => {
         if (listed.status === "completed") return;
@@ -273,19 +313,19 @@ export function createGitHubSource<Signal extends StopSignal = StopSignal>(optio
         const jobs = items.map((item) => readJob(item, run)).filter((job): job is SourceJob => job !== null);
         sourceRuns.push({ run, jobs });
       }
-      const runners = (await list(`${base}/actions/runners`, {}, "runners", signal, Number.MAX_SAFE_INTEGER)).map(readRunner);
-      return { runs: sourceRuns, runners };
+      const runners = (await list(runnersAt, {}, "runners", signal, Number.MAX_SAFE_INTEGER)).map(readRunner);
+      return organization === undefined ? { runs: sourceRuns, runners } : { runs: sourceRuns, runners, scope: organizationScope(organization) };
     },
 
     async register(request: RunnerRequest, signal: Signal): Promise<RunnerRegistration> {
-      const base = repositoryPath(request.repository);
+      const runnersAt = runnersPath(request.repository);
       const { name, labels } = request;
       if (typeof name !== "string" || name.length === 0) throw new TypeError("The name of a runner is not a text with a character.");
       if (!Array.isArray(labels) || labels.length === 0 || !labels.every((label) => typeof label === "string" && label.length > 0)) {
         throw new TypeError(`The labels of the runner ${show(name)} are not a list of texts.`);
       }
       const answer = await send(
-        { method: "POST", path: `${base}/actions/runners/generate-jitconfig`, query: {}, body: { name, runner_group_id: runnerGroup, labels: [...labels] } },
+        { method: "POST", path: `${runnersAt}/generate-jitconfig`, query: {}, body: { name, runner_group_id: runnerGroup, labels: [...labels] } },
         signal,
       );
       // The body of a refusal can have the configuration or a name from outside. The text of the error does not have it.
@@ -303,12 +343,115 @@ export function createGitHubSource<Signal extends StopSignal = StopSignal>(optio
     },
 
     async remove(repository: string, runnerId: number, signal: Signal): Promise<void> {
-      const base = repositoryPath(repository);
+      const runnersAt = runnersPath(repository);
       if (!isId(runnerId)) throw new RangeError("The id of a runner is not a whole number from 1.");
-      const answer = await send({ method: "DELETE", path: `${base}/actions/runners/${runnerId}`, query: {}, body: null }, signal);
+      const answer = await send({ method: "DELETE", path: `${runnersAt}/${runnerId}`, query: {}, body: null }, signal);
       if (answer.status !== 204 && answer.status !== 404) {
         throw new Error(`GitHub answered the request to remove the runner ${runnerId} with the status ${showStatus(answer.status)}.`);
       }
     },
   };
+}
+
+/** This record has the facts of a runner group of an organization, as GitHub gives them. */
+export interface RunnerGroupFacts {
+  /** This field is the runner group. */
+  readonly group: unknown;
+  /** This list has each repository that the group names. It is `null` when the group does not name its repositories. */
+  readonly repositories: readonly unknown[] | null;
+}
+
+/** This record has the rules of the check of a runner group. */
+export interface RunnerGroupRules {
+  /** This list has each served repository, as `owner/name`. */
+  readonly served: readonly string[];
+  /** This field is `true` when the group can admit a public repository. The default is `false`. */
+  readonly publicRepositories?: boolean;
+}
+
+/** This record is the result of the check of a runner group. */
+export interface RunnerGroupCheck {
+  /** This field is `true` when the check found no problem. */
+  readonly pass: boolean;
+  /** This list has one sentence for each problem. */
+  readonly problems: readonly string[];
+}
+
+/**
+ * This function decides if the runners of a group serve only the served repositories. It has no effect.
+ * A runner of an organization can take a job of each repository that its group admits. Thus the group must admit each served repository and no other repository.
+ *
+ * - The group must name its repositories: the visibility `selected`.
+ * - The group must admit no public repository, unless the rules permit it.
+ * - Each named repository must be a served repository, and each served repository must be a named repository that the group admits.
+ *
+ * @param facts - The group and its repositories, as GitHub gives them
+ * @param rules - The served repositories, and the permission for a public repository
+ * @returns The result, with each problem
+ */
+export function judgeRunnerGroup(facts: RunnerGroupFacts, rules: RunnerGroupRules): RunnerGroupCheck {
+  const problems: string[] = [];
+  const allowsPublic = field(facts.group, "allows_public_repositories");
+  const visibility = field(facts.group, "visibility");
+  const publicPermitted = rules.publicRepositories === true;
+  if (typeof allowsPublic !== "boolean") problems.push("The group has no field allows_public_repositories.");
+  else if (allowsPublic && !publicPermitted) problems.push("The group admits public repositories.");
+  if (visibility === "all") problems.push("The group admits each repository of the organization.");
+  else if (visibility === "private") problems.push("The group admits each private repository of the organization.");
+  else if (typeof visibility !== "string") problems.push("The group has no visibility.");
+  else if (visibility !== "selected") problems.push(`The group has the visibility ${show(visibility)}, and the check does not know it.`);
+  else if (facts.repositories === null) problems.push("The group names its repositories, and the check has no list of them.");
+  else {
+    const named: { readonly name: string; readonly open: boolean }[] = [];
+    for (const each of facts.repositories) {
+      const name = field(each, "full_name");
+      const closed = field(each, "private");
+      if (!isRepositoryName(name) || typeof closed !== "boolean") problems.push("A repository of the group has no name or no field private.");
+      else named.push({ name, open: !closed });
+    }
+    for (const each of named) {
+      if (!rules.served.some((served) => sameName(served, each.name))) {
+        problems.push(`The group admits the repository ${show(each.name)}, and the dispatcher does not serve it.`);
+      } else if (each.open && allowsPublic !== true) {
+        problems.push(`The served repository ${show(each.name)} is public, and the group admits no public repository.`);
+      }
+    }
+    for (const served of rules.served) {
+      if (!named.some((each) => sameName(each.name, served))) problems.push(`The group does not name the served repository ${show(served)}.`);
+    }
+  }
+  return { pass: problems.length === 0, problems };
+}
+
+/**
+ * This function reads a runner group of an organization and its repositories, and it checks them with `judgeRunnerGroup`.
+ * The program of the service uses it before its first pass. The credential needs the permission to read the runners of the organization.
+ *
+ * @param api - The client of the REST API
+ * @param organization - The name of the organization
+ * @param runnerGroup - The id of the runner group
+ * @param rules - The served repositories, and the permission for a public repository
+ * @param signal - The signal that stops the requests
+ * @returns The result, with each problem
+ * @throws RangeError when the organization or the group is not valid
+ * @throws Error when GitHub does not give the group or its list. The text of the error does not have the body of an answer.
+ */
+export async function checkRunnerGroup<Signal extends StopSignal = StopSignal>(
+  api: GitHubApi<Signal>,
+  organization: string,
+  runnerGroup: number,
+  rules: RunnerGroupRules,
+  signal: Signal,
+): Promise<RunnerGroupCheck> {
+  if (typeof organization !== "string" || !ORGANIZATION.test(organization)) {
+    throw new RangeError(`The organization ${show(organization)} is not a name of GitHub.`);
+  }
+  if (!isId(runnerGroup)) throw new RangeError("The runner group is not a whole number from 1.");
+  const path = `/orgs/${organization}/actions/runner-groups/${runnerGroup}`;
+  const answer = await sendTo(api, { method: "GET", path, query: {}, body: null }, signal);
+  if (answer.status !== 200) throw new Error(`GitHub answered the request for the runner group ${runnerGroup} with the status ${showStatus(answer.status)}.`);
+  if (field(answer.body, "id") !== runnerGroup) throw new Error(`GitHub answered the request for the runner group ${runnerGroup} with a different group.`);
+  const repositories =
+    field(answer.body, "visibility") === "selected" ? await listAll(api, `${path}/repositories`, {}, "repositories", signal, Number.MAX_SAFE_INTEGER) : null;
+  return judgeRunnerGroup({ group: answer.body, repositories }, rules);
 }

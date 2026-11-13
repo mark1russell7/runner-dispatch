@@ -2,7 +2,7 @@
 
 One-job CI runners for trusted jobs. The dispatcher gives a waiting job of GitHub Actions a new machine, for that job only. It destroys the machine after the job.
 
-The first package has the records, the trust rules, the check on the machine and the life of a machine. It also has the passes of a dispatcher and the GitHub source for runners of a repository. The second package declares the dispatcher as a service. The client of the GitHub API and the runners of an organization are not written yet. The provider of Proxmox VE and the program of the service are also not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
+The first package has the records, the trust rules, the check on the machine and the life of a machine. It also has the passes of a dispatcher and the GitHub source for runners of a repository or of an organization. The second package declares the dispatcher as a service. The provider of Proxmox VE and the program of the service are also not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
 
 ## The problem
 
@@ -41,7 +41,8 @@ The dispatcher asks GitHub for the one-job configuration of each runner. The per
 - Thus an organization gives the smaller credential. There, the dispatcher can be a GitHub App with only these two permissions.
 - For a repository of a personal account, give the credential only the served repositories.
 - A machine of a job does not get the credential. It gets only the one-job configuration of its runner.
-- The source supports runners of a repository. The runners of an organization come later in item R4 of the roadmap.
+- The source supports runners of a repository and runners of an organization.
+- A runner of an organization can take a job of each repository that its runner group admits. `checkRunnerGroup` examines that the group admits only the served repositories.
 
 ## The packages
 

@@ -200,6 +200,16 @@ interface Wanted {
 }
 
 /**
+ * This function gives the key of the scope of the runner registrations that an observation shows.
+ * A view with no scope has the scope of its repository. The key of such a scope is not the key of a named scope.
+ */
+function scopeKey(observation: RepositoryObservation): string | null {
+  if (observation.view === null) return null;
+  const { scope } = observation.view;
+  return typeof scope === "string" ? `scope ${scope}` : `repository ${foldName(observation.repository)}`;
+}
+
+/**
  * This function is the decision of one pass of the dispatcher. It reads the memory and the facts of the pass, and it has no effect.
  *
  * - It adopts each machine of the provider that the memory does not have. Thus a dispatcher that starts again finds each machine.
@@ -207,7 +217,7 @@ interface Wanted {
  * - A machine goes to `done` when it stopped, the stop switch is on, the policy does not trust its run, or its timer fires.
  * - A machine that waits for a job goes to `done` when its run ended, or its runner has no registration.
  * - It asks for one machine for each queued job of a trusted run that names the run label. The machines of the run that wait for a job decrease the count.
- * - It removes each runner registration of the dispatcher that has no job and no machine that works.
+ * - It removes each runner registration of the dispatcher that has no job and no machine that works. It removes a registration of a scope one time.
  *
  * @param state - The memory of the dispatcher
  * @param seen - The facts of the pass
@@ -398,13 +408,27 @@ export function plan(state: DispatchState, seen: Observation, config: DispatchCo
   }
 
   // A registration of this dispatcher with no job is removed when its machine has no more work, or is not there.
+  // The views of the repositories of one organization show the same registrations. The plan examines each registration of a scope one time.
+  // A registration is the registration of the machine with its name when the scope of the machine is the scope of the registration.
+  // The scope of a repository is its own scope, or a named scope that only its view tells. Thus the plan keeps a registration of a named scope
+  // when the pass did not see the repository of its machine.
   const removals: PlannedRemoval[] = [];
+  const examined = new Set<string>();
   for (const place of seen.views) {
-    if (place.view === null) continue;
+    const scope = scopeKey(place);
+    if (place.view === null || scope === null) continue;
+    const named = typeof place.view.scope === "string";
     for (const runner of place.view.runners) {
       if (runner.busy || parseMachineName(settings.prefix, runner.name) === null) continue;
+      const key = `${scope}\n${runner.runnerId}`;
+      if (examined.has(key)) continue;
+      examined.add(key);
       const entry = entries.get(runner.name);
-      const own = entry !== undefined && sameName(entry.machine.repository, place.repository) ? entry : undefined;
+      const home = entry === undefined ? undefined : observed(entry.machine.repository);
+      const homeScope = home === undefined ? null : scopeKey(home);
+      if (entry !== undefined && homeScope === null && named) continue;
+      const same = homeScope === null ? sameName(entry?.machine.repository, place.repository) : homeScope === scope;
+      const own = entry !== undefined && same ? entry : undefined;
       const gone = own === undefined ? seen.machines !== null : own.life.state === "done" || own.life.state === "destroyed";
       if (gone) removals.push({ repository: place.repository, runnerId: runner.runnerId, name: runner.name });
     }

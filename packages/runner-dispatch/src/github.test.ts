@@ -2,7 +2,17 @@ import { fakeClock } from "@mark1russell7/algebra/clock";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { createDispatcher } from "./dispatcher.ts";
-import { createGitHubSource, OPEN_RUN_STATUSES, type GitHubAnswer, type GitHubApi, type GitHubRequest } from "./github.ts";
+import {
+  checkRunnerGroup,
+  createGitHubSource,
+  judgeRunnerGroup,
+  OPEN_RUN_STATUSES,
+  organizationScope,
+  type GitHubAnswer,
+  type GitHubApi,
+  type GitHubRequest,
+  type RunnerGroupFacts,
+} from "./github.ts";
 import type { MachineTimes } from "./lifecycle.ts";
 import { decide, type TrustRules } from "./policy.ts";
 import type { JobSource, RepositoryView } from "./ports.ts";
@@ -37,6 +47,7 @@ const sorted = (view: RepositoryView): RepositoryView => ({
     .sort((a, b) => a.run.runId - b.run.runId || a.run.runAttempt - b.run.runAttempt)
     .map((run) => ({ run: run.run, jobs: [...run.jobs].sort((a, b) => a.jobId - b.jobId) })),
   runners: [...view.runners].sort((a, b) => a.runnerId - b.runnerId),
+  ...(view.scope === undefined ? {} : { scope: view.scope }),
 });
 
 /** This type is a client of the REST API that a test writes, with the record of each request. */
@@ -399,6 +410,162 @@ describe("createGitHubSource: the runners", () => {
   });
 });
 
+describe("createGitHubSource: the runners of an organization", () => {
+  const REQUEST = { repository: REPO, name: "rd-100-1-00000000", labels: ["run-100-1", "small"] };
+  const organization = (runners: readonly unknown[] = []): Scripted =>
+    repository([], {}, [], (request) => {
+      if (request.path === "/orgs/Octo/actions/runners") return ok({ total_count: runners.length, runners });
+      if (request.path === "/orgs/Octo/actions/runners/generate-jitconfig") {
+        return { status: 201, body: { runner: { id: 9, name: REQUEST.name }, encoded_jit_config: SECRET } };
+      }
+      if (request.path === "/orgs/Octo/actions/runners/9") return { status: 204, body: null };
+      return null;
+    });
+
+  it("lists, registers and removes the runners on the paths of the organization, and the view names the scope", async () => {
+    const at = organization([{ id: 9, name: REQUEST.name, status: "online", busy: false }]);
+    const source = createGitHubSource({ api: at.api, organization: "Octo", runnerGroup: 3 });
+    expect(organizationScope("Octo")).toBe("organization:octo");
+    expect(await source.view(REPO, [], signal)).toEqual({ runs: [], runners: [{ runnerId: 9, name: REQUEST.name, online: true, busy: false }], scope: "organization:octo" });
+    expect(await source.register({ ...REQUEST, repository: "OCTO/lib" }, signal)).toEqual({ runnerId: 9, configuration: SECRET });
+    await source.remove(OTHER, 9, signal);
+    expect(at.requests.slice(OPEN_RUN_STATUSES.length).map((request) => [request.method, request.path])).toEqual([
+      ["GET", "/orgs/Octo/actions/runners"],
+      ["POST", "/orgs/Octo/actions/runners/generate-jitconfig"],
+      ["DELETE", "/orgs/Octo/actions/runners/9"],
+    ]);
+    expect(at.requests[OPEN_RUN_STATUSES.length + 1]?.body).toEqual({ name: REQUEST.name, runner_group_id: 3, labels: REQUEST.labels });
+    // The runs stay the runs of the repository.
+    expect(at.requests.slice(0, OPEN_RUN_STATUSES.length).every((request) => request.path === `/repos/${REPO}/actions/runs`)).toBe(true);
+  });
+
+  it("gives no scope in a view of the runners of a repository", async () => {
+    expect(await createGitHubSource({ api: repository([]).api }).view(REPO, [], signal)).not.toHaveProperty("scope");
+  });
+
+  it("refuses a repository of a different owner before each request", async () => {
+    const at = organization();
+    const source = createGitHubSource({ api: at.api, organization: "octo" });
+    const text = 'The repository "evil/app" is not a repository of the organization "octo".';
+    await expect(source.view("evil/app", [], signal)).rejects.toThrow(new RangeError(text));
+    await expect(source.register({ ...REQUEST, repository: "evil/app" }, signal)).rejects.toThrow(new RangeError(text));
+    await expect(source.remove("evil/app", 9, signal)).rejects.toThrow(new RangeError(text));
+    await expect(source.view("octopus/app", [], signal)).rejects.toThrow(RangeError);
+    expect(at.requests).toEqual([]);
+  });
+
+  it("refuses an organization that is not a name of GitHub", () => {
+    const at = scripted(() => ok(null));
+    for (const name of ["", "-octo", "octo-", "oc/to", "octo app", "../x", "a".repeat(40)]) {
+      expect(() => createGitHubSource({ api: at.api, organization: name })).toThrow(
+        new RangeError(`The organization ${JSON.stringify(name)} of a GitHub source is not a name of GitHub.`),
+      );
+    }
+    expect(() => createGitHubSource({ api: at.api, organization: 5 as unknown as string })).toThrow(
+      new RangeError("The organization a value of the type number of a GitHub source is not a name of GitHub."),
+    );
+    expect(() => createGitHubSource({ api: at.api, organization: "a".repeat(39) })).not.toThrow();
+    expect(() => createGitHubSource({ api: at.api, organization: "o" })).not.toThrow();
+    expect(() => createGitHubSource({ api: at.api, organization: "my-org-2" })).not.toThrow();
+  });
+});
+
+describe("the check of a runner group", () => {
+  const group = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 3,
+    name: "home",
+    visibility: "selected",
+    default: false,
+    allows_public_repositories: false,
+    ...over,
+  });
+  const repo = (full_name: string, closed = true): Record<string, unknown> => ({ id: 1, full_name, private: closed });
+  const RULES_OF_GROUP = { served: [REPO, OTHER] };
+
+  it("passes a group that names each served repository and no other repository, and admits no public repository", () => {
+    expect(judgeRunnerGroup({ group: group(), repositories: [repo("Octo/App"), repo(OTHER)] }, RULES_OF_GROUP)).toEqual({ pass: true, problems: [] });
+    const open = { group: group({ allows_public_repositories: true }), repositories: [repo(REPO, false), repo(OTHER)] };
+    expect(judgeRunnerGroup(open, { ...RULES_OF_GROUP, publicRepositories: true })).toEqual({ pass: true, problems: [] });
+  });
+
+  it("gives each problem of a group", () => {
+    const cases: [RunnerGroupFacts, string[]][] = [
+      [{ group: group({ visibility: "all" }), repositories: null }, ["The group admits each repository of the organization."]],
+      [{ group: group({ visibility: "private" }), repositories: null }, ["The group admits each private repository of the organization."]],
+      [{ group: group({ visibility: "some" }), repositories: null }, ['The group has the visibility "some", and the check does not know it.']],
+      [{ group: group(), repositories: null }, ["The group names its repositories, and the check has no list of them."]],
+      [{ group: group({ allows_public_repositories: true }), repositories: [repo(REPO), repo(OTHER)] }, ["The group admits public repositories."]],
+      [{ group: group({ allows_public_repositories: "no" }), repositories: [repo(REPO), repo(OTHER)] }, ["The group has no field allows_public_repositories."]],
+      [
+        { group: group(), repositories: [repo(REPO), repo(OTHER), repo("octo/secret")] },
+        ['The group admits the repository "octo/secret", and the dispatcher does not serve it.'],
+      ],
+      [{ group: group(), repositories: [repo(REPO)] }, ['The group does not name the served repository "octo/lib".']],
+      [
+        { group: group(), repositories: [repo(REPO, false), repo(OTHER)] },
+        ['The served repository "octo/app" is public, and the group admits no public repository.'],
+      ],
+      [
+        { group: group(), repositories: [repo(REPO), repo(OTHER), { full_name: "octo/x" }, "octo/y"] },
+        ["A repository of the group has no name or no field private.", "A repository of the group has no name or no field private."],
+      ],
+      [{ group: null, repositories: null }, ["The group has no field allows_public_repositories.", "The group has no visibility."]],
+    ];
+    for (const [facts, problems] of cases) expect(judgeRunnerGroup(facts, RULES_OF_GROUP)).toEqual({ pass: false, problems });
+  });
+
+  it("reads the group and the pages of its repositories", async () => {
+    const at = scripted((request) => {
+      if (request.path === "/orgs/octo/actions/runner-groups/3") return ok(group());
+      if (request.path === "/orgs/octo/actions/runner-groups/3/repositories") {
+        const all = [repo(REPO), repo(OTHER)];
+        const part = request.query["page"] === "1" ? all.slice(0, 1) : all.slice(1);
+        return ok({ total_count: all.length, repositories: part });
+      }
+      return { status: 404, body: null };
+    });
+    expect(await checkRunnerGroup(at.api, "octo", 3, RULES_OF_GROUP, signal)).toEqual({ pass: true, problems: [] });
+    expect(at.requests.map((request) => [request.path, request.query["page"] ?? null])).toEqual([
+      ["/orgs/octo/actions/runner-groups/3", null],
+      ["/orgs/octo/actions/runner-groups/3/repositories", "1"],
+      ["/orgs/octo/actions/runner-groups/3/repositories", "2"],
+    ]);
+  });
+
+  it("does not read the repositories of a group that does not name them", async () => {
+    const at = scripted(() => ok(group({ visibility: "all" })));
+    expect((await checkRunnerGroup(at.api, "octo", 3, RULES_OF_GROUP, signal)).pass).toBe(false);
+    expect(at.requests.length).toBe(1);
+  });
+
+  it("throws when GitHub does not give the group, and the error has no part of the body", async () => {
+    const cases: [GitHubAnswer, string][] = [
+      [{ status: 403, body: { message: SECRET } }, "GitHub answered the request for the runner group 3 with the status 403."],
+      [{ status: 200, body: { ...group(), id: 4, name: SECRET } }, "GitHub answered the request for the runner group 3 with a different group."],
+    ];
+    for (const [answer, text] of cases) {
+      const error = await checkRunnerGroup(scripted(() => answer).api, "octo", 3, RULES_OF_GROUP, signal).catch((caught: unknown) => caught);
+      expect(error).toEqual(new Error(text));
+    }
+    const list = scripted((request) => (request.path.endsWith("/repositories") ? { status: 500, body: { message: SECRET } } : ok(group())));
+    await expect(checkRunnerGroup(list.api, "octo", 3, RULES_OF_GROUP, signal)).rejects.toThrow(
+      new Error("GitHub answered the list /orgs/octo/actions/runner-groups/3/repositories with the status 500."),
+    );
+  });
+
+  it("refuses an organization or a group that is not valid before it asks GitHub", async () => {
+    const at = scripted(() => ok(group()));
+    await expect(checkRunnerGroup(at.api, "oc/to", 3, RULES_OF_GROUP, signal)).rejects.toThrow(new RangeError('The organization "oc/to" is not a name of GitHub.'));
+    for (const id of [0, 1.5, -1]) {
+      await expect(checkRunnerGroup(at.api, "octo", id, RULES_OF_GROUP, signal)).rejects.toThrow(new RangeError("The runner group is not a whole number from 1."));
+    }
+    await expect(checkRunnerGroup(at.api, "octo", 3, RULES_OF_GROUP, { aborted: true })).rejects.toThrow(
+      new Error("The signal stopped the request GET /orgs/octo/actions/runner-groups/3."),
+    );
+    expect(at.requests).toEqual([]);
+  });
+});
+
 describe("createGitHubSource: the names and the signal", () => {
   it("refuses a repository that is not a name as owner/name, before each request", async () => {
     const at = scripted(() => ok({ total_count: 0, workflow_runs: [] }));
@@ -459,6 +626,33 @@ describe("fakeGitHubApi", () => {
     expect(at.world.runners()).toEqual([]);
   });
 
+  it("keeps the runners of an organization and of a repository in separate scopes, and answers 404 for an organization that the world does not have", async () => {
+    const world = fakeWorld({ clock: fakeClock(0), times: WORLD, organizations: ["octo"] });
+    const api = fakeGitHubApi(world);
+    const source = createGitHubSource({ api: api.api, organization: "octo" });
+    const request = { repository: REPO, name: "rd-100-1-00000000", labels: ["run-100-1"] };
+    const made = await source.register(request, signal);
+    expect(world.runners().map((runner) => runner.scope)).toEqual(["octo"]);
+    expect([world.scopeOf(REPO), world.scopeOf("Octo/Lib"), world.scopeOf("evil/app"), world.organizations()]).toEqual(["octo", "octo", "evil/app", ["octo"]]);
+    expect((await source.view(OTHER, [], signal)).runners.map((runner) => runner.name)).toEqual([request.name]);
+    expect(sorted(await source.view(OTHER, [], signal))).toEqual(sorted(await world.source.view(OTHER, [], signal)));
+    // The repository has no runner of its own, and a runner of the repository is not a runner of the organization.
+    const own = createGitHubSource({ api: api.api });
+    expect((await own.view(REPO, [], signal)).runners).toEqual([]);
+    await own.register({ ...request, name: "rd-100-1-00000001" }, signal);
+    expect(world.runners().map((runner) => [runner.name, runner.scope])).toEqual([
+      [request.name, "octo"],
+      ["rd-100-1-00000001", REPO],
+    ]);
+    expect((await source.view(REPO, [], signal)).runners.map((runner) => runner.name)).toEqual([request.name]);
+    const missing = await api.api.request({ method: "GET", path: "/orgs/evil/actions/runners", query: {}, body: null }, signal);
+    expect(missing.status).toBe(404);
+    const unknown = await api.api.request({ method: "GET", path: "/orgs/octo/actions/runs", query: {}, body: null }, signal);
+    expect(unknown.status).toBe(404);
+    await source.remove(OTHER, made.runnerId, signal);
+    expect(world.runners().map((runner) => runner.name)).toEqual(["rd-100-1-00000001"]);
+  });
+
   it("refuses a page size that is not a whole number from 1", () => {
     const world = fakeWorld({ clock: fakeClock(0), times: WORLD });
     expect(() => fakeGitHubApi(world, { pageSize: 0 })).toThrow(new RangeError("The page size of a fake API is not a whole number from 1."));
@@ -480,17 +674,18 @@ describe("the GitHub source on a fake world: each scenario", () => {
     ),
     pageSize: fc.integer({ min: 1, max: 4 }),
     period: fc.constantFrom(1000, 5000),
+    organization: fc.boolean(),
   });
   const LIMIT = 600_000;
 
   it("gives the view of the fake source at each pass, and the dispatcher on it does each served job one time", async () => {
-    const seen = { working: 0, completed: 0, busy: 0, offline: 0, paged: 0, cancelled: 0 };
+    const seen = { working: 0, completed: 0, busy: 0, offline: 0, paged: 0, cancelled: 0, organization: 0, shared: 0 };
     await fc.assert(
       fc.asyncProperty(scenario, async (given) => {
         const clock = fakeClock(0);
-        const world = fakeWorld({ clock, times: WORLD });
+        const world = fakeWorld({ clock, times: WORLD, ...(given.organization ? { organizations: ["octo"] } : {}) });
         const fake = fakeGitHubApi(world, { pageSize: given.pageSize });
-        const source = createGitHubSource({ api: fake.api });
+        const source = createGitHubSource({ api: fake.api, ...(given.organization ? { organization: "octo" } : {}) });
         const dispatcher = createDispatcher({
           rules: RULES,
           times: TIMES,
@@ -555,6 +750,11 @@ describe("the GitHub source on a fake world: each scenario", () => {
         expect(new Set(starts.map((event) => event.name)).size).toBe(starts.length);
         if (fake.requests().some((request) => request.query["page"] === "2")) seen.paged += 1;
         if (world.jobs().some((job) => job.result === "cancelled" && job.runner !== null)) seen.cancelled += 1;
+        // The views of the two repositories of an organization show the same runners. The dispatcher removes each runner one time at most.
+        const removals = fake.requests().filter((request) => request.method === "DELETE").map((request) => request.path);
+        expect(new Set(removals).size).toBe(removals.length);
+        if (given.organization) seen.organization += 1;
+        if (given.organization && removals.length > 0 && runs.some((run) => run.repository === OTHER)) seen.shared += 1;
       }),
       { numRuns: 200, seed: 20261112 },
     );
