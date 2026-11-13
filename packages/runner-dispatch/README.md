@@ -1,8 +1,8 @@
 # @mark1russell7/runner-dispatch
 
-The records, the trust rules, the check on the machine and the life of a machine of one-job CI runners. It also has the passes of a dispatcher and the GitHub source. The package is not on npm yet.
+The records, the trust rules, the check on the machine and the life of a machine of one-job CI runners. It also has the passes of a dispatcher, the GitHub source and the Proxmox provider. The package is not on npm yet.
 
-A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has the life of a machine as a state machine. It has no network code. The GitHub source sends its requests through a client that the host gives.
+A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has the life of a machine as a state machine. It has no network code. The GitHub source and the Proxmox provider send their requests through clients that the host gives.
 
 ## The records
 
@@ -573,6 +573,94 @@ With an organization, each view also lists the runners of the organization. Thus
 - The same test measures the labels that GitHub adds to a one-job runner, and the runner group of a repository.
 - It also measures if an organization on the Free plan can limit its default runner group to selected repositories.
 
+## The Proxmox provider
+
+The entry `@mark1russell7/runner-dispatch/proxmox` has a provider on the API of Proxmox VE. Each machine is a linked clone of the template of its size, in one pool.
+
+```ts
+import { createProxmoxProvider } from "@mark1russell7/runner-dispatch/proxmox";
+
+const provider = createProxmoxProvider({
+  api,
+  pool: "runners",
+  sizes: { small: { node: "pve1", template: 9000, cores: 2, memory: 4096 } },
+});
+```
+
+`api` is a client of the API. Its one method `request(request, signal)` gives the status, the message and the data of the answer. The client has these tasks:
+
+- It adds an API token in the header `Authorization`. A request with a token needs no CSRF token.
+- It sends the parameters of a `POST` or a `PUT` as a form body, and the other parameters in the query.
+- It trusts the certificate authority of the cluster.
+- It throws only when it gets no answer. Each status is an answer.
+
+### The steps of a machine
+
+| Step | Request | The provider waits for |
+| --- | --- | --- |
+| Make | `GET /cluster/nextid`, then `POST /nodes/{node}/qemu/{template}/clone` with `newid`, `name`, `pool` and `description` | The task of the clone |
+| Size | `PUT /nodes/{node}/qemu/{vmid}/config` with `cores`, `memory` and `tags` | The answer |
+| Start | `POST /nodes/{node}/qemu/{vmid}/status/start` | The task of the start, then the guest agent |
+| Delivery | `POST /nodes/{node}/qemu/{vmid}/agent/file-write`, first for the settings of the check, then for the configuration | The answer |
+| Tag | `PUT /nodes/{node}/qemu/{vmid}/config` with the tag `delivered` | The answer |
+| Destroy | `POST /nodes/{node}/qemu/{vmid}/status/stop`, then `DELETE /nodes/{node}/qemu/{vmid}` with `purge` and `destroy-unreferenced-disks` | The task of the stop, then the task of the delete |
+
+- `make` sends only the clone. Each call of `machines` reads the pool with `GET /cluster/resources?type=vm`, and it does the next step of each machine.
+- The description of the VM is the record of its machine, as the JSON document `runner-machine/1`. Thus a new provider reads the record of each machine again.
+- A machine is `operating` only when it has the tag `delivered`. The provider adds the tag after the two file writes. Thus after a restart, a running machine with no tag is `stopped`.
+- The configuration goes in the body of one request: the file write to its path. No problem text and no error text has a part of it.
+- A destroy of a machine that is not there succeeds. The provider accepts a repeated destroy in each step.
+
+### The faults
+
+| Fault | What the provider does |
+| --- | --- |
+| A different client takes the VMID before the clone | It tries a new VMID, eight times at most. |
+| The clone, the size or the start fails | The machine is `stopped`, and the provider tells the problem. The dispatcher then destroys it. |
+| The template has no guest agent | The machine stays `making`, and the provider tells it one time. The timer of the life of the machine ends it. |
+| The machine stops before its delivery | The machine is `stopped`. It gets no configuration. |
+| A file write fails | The provider tries it again at the next list. The problem text has only the status of the answer. |
+| An operator removes the VM | The machine is not in the list. |
+| Two VMs of the pool have the name of one machine | The provider keeps the VM of its record, and it tells the problem. |
+| A VM of the pool has no record of a machine | The provider does not change it and does not show it. It tells it one time. |
+
+### Why the guest agent, and not cloud-init
+
+A cloud-init file of Proxmox VE is a snippet on a storage of the host. The API cannot write a snippet: its upload accepts only the types `iso`, `vztmpl` and `import`. Thus a snippet needs a different route to the host, and it stays on the disk of the host. The guest agent writes the file into the guest, with one request of the API.
+
+### The template
+
+The provider does not make the template. Each template obeys these rules:
+
+- It is a template of Proxmox VE, outside the pool. Thus the token cannot change it or delete it.
+- It has the option `agent: 1`, and its image starts `qemu-guest-agent`.
+- It does not have the tag `delivered`. The provider removes such a tag from a clone.
+- The image makes the folder `/run/runner-dispatch` at each start. `/run` is a file system in memory, so the configuration does not go to a disk.
+- A path unit of systemd watches `/run/runner-dispatch/configuration`. Its service reads the file, removes it and starts the runner with it.
+- The job-started program reads its settings from `/run/runner-dispatch/check.json`.
+- The image stops the machine after its one job. It also stops the machine after a limit of time with no job.
+
+The option `files` of the provider changes the two paths.
+
+### The privileges of the token
+
+Give these privileges to the token and to its user. A token with separate privileges gets only the privileges that its user also has.
+
+| Path | Privileges | Why |
+| --- | --- | --- |
+| `/pool/{pool}` | `VM.Allocate`, `VM.Audit`, `VM.Config.CPU`, `VM.Config.Memory`, `VM.Config.Options`, `VM.PowerMgmt`, `VM.GuestAgent.FileWrite`, `VM.GuestAgent.Audit`, `Pool.Audit` | The clones and their steps |
+| `/vms/{template}` | `VM.Clone`, `VM.Audit` | The source of each clone |
+| `/storage/{storage}` | `Datastore.AllocateSpace` | The disks of the clones |
+| `/sdn/zones/{zone}/{bridge}` | `SDN.Use` | The network bridge of the clones |
+
+- These privilege names are the names of Proxmox VE 9. Proxmox VE 8 has no `VM.GuestAgent.*` privileges. There, `VM.Monitor` replaces the two, and it also permits each other command of the guest agent.
+- A clone joins the pool only at the end of its task. Thus the provider keeps the task of each clone, and it reads the task with no privilege on the VM.
+- A stolen token can make, change, stop and delete the VMs of the pool, and write files into them. It cannot touch a VM outside the pool.
+
+### What the provider does not do yet
+
+- A test on a real host measures the steps, the privileges and the times. The program of the service and its real client come with item R5 of the roadmap.
+
 ## The tests
 
 Property tests on `fast-check` hold the rules of the policy:
@@ -620,3 +708,15 @@ Tests hold the GitHub source:
 - Tests with written answers hold each refusal: a bad shape, a list that changed, a count that does not agree and an unexpected status.
 - No error text has a part of the body of an answer.
 - The source sends no request for a repository name that is not valid, and no request after the signal stops.
+
+Tests hold the Proxmox provider, on a fake API of Proxmox VE:
+
+- A machine is `operating` only after the two files in the guest have their exact text.
+- The configuration is only in the body of the file write to its path.
+- Each fault of the table of the faults has a test.
+- A new provider shows a delivered machine as `operating`, and a different machine as `stopped`.
+- A property test does random steps: makes, lists, ticks, destroys, stops, removals and failed tasks.
+  - Each configuration goes only to its own machine, and no problem text has a part of it.
+  - The provider changes no VM outside its own machines, and it changes the template only by a clone.
+  - After a destroy of each machine, the pool has only the VM of a different owner.
+- Four changes of the provider make the tests fail: no write of the configuration, no tag check, no stop check and no tag removal.

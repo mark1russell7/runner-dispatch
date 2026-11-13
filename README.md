@@ -2,7 +2,7 @@
 
 One-job CI runners for trusted jobs. The dispatcher gives a waiting job of GitHub Actions a new machine, for that job only. It destroys the machine after the job.
 
-The first package has the records, the trust rules, the check on the machine and the life of a machine. It also has the passes of a dispatcher and the GitHub source for runners of a repository or of an organization. The second package declares the dispatcher as a service. The provider of Proxmox VE and the program of the service are also not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
+The first package has the records, the trust rules, the check on the machine and the life of a machine. It also has the passes of a dispatcher, the GitHub source for runners of a repository or of an organization, and the provider of Proxmox VE. The second package declares the dispatcher as a service. The program of the service is not written yet. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the plan.
 
 ## The problem
 
@@ -48,7 +48,7 @@ The dispatcher asks GitHub for the one-job configuration of each runner. The per
 
 | Package | What it has |
 | --- | --- |
-| [`@mark1russell7/runner-dispatch`](packages/runner-dispatch) | The records of a run, a job and a machine, the trust rules as data, the policy, the check on the machine with its job-started program, and the life of a machine as a state machine. It also has the settings of a dispatcher, the two ports, the plan of a pass, the GitHub source and a fake world for tests. It is not on npm yet. |
+| [`@mark1russell7/runner-dispatch`](packages/runner-dispatch) | The records of a run, a job and a machine, the trust rules as data, the policy, the check on the machine with its job-started program, and the life of a machine as a state machine. It also has the settings of a dispatcher, the two ports, the plan of a pass, the GitHub source, the Proxmox provider and fake worlds for tests. It is not on npm yet. |
 | [`@runner-dispatch/dispatcher`](packages/dispatcher) | The dispatcher as one service of `@mark1russell7/service`: the loop of the passes, its times, its liveness check and its shutdown. The program comes with the first source and the first provider. It is private. |
 
 Other packages give the general parts:
