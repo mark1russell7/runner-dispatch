@@ -61,7 +61,11 @@ interface Stage {
 const stage = (options: StageOptions = {}): Stage => {
   const clock = fakeClock(0);
   const lag = options.lag ?? 0;
-  const world = fakeWorld({ clock, times: options.world ?? { boot: 2000, connect: 1000, destroy: 500 }, faults: options.fault });
+  const world = fakeWorld({
+    clock,
+    times: options.world ?? { boot: 2000, connect: 1000, destroy: 500 },
+    ...(options.fault === undefined ? {} : { faults: options.fault }),
+  });
   const wait = async (): Promise<void> => {
     if (lag > 0) await clock.advance(lag);
   };
@@ -197,7 +201,8 @@ describe("noteReport: one job", () => {
       started: { after: 0, at: 5000 },
       completed: { after: 5000, at: 10_000 },
       runner: M0,
-      last: "completed",
+      // The view does not show a complete run. Thus the last status that a view showed is `in_progress`.
+      last: "in_progress",
     });
     expect(at.measures).toMatchObject({ machines: [], jobs: [] });
 
@@ -226,7 +231,8 @@ describe("noteReport: one job", () => {
   it("does not use a failed read as a bound, and keeps the record of a machine open with no read of the provider", async () => {
     let failing = false;
     const at = stage({ fault: (request) => (failing && (request === "view" || request === "machines") ? "refuse" : null) });
-    addRun(at, 100, [4000]);
+    // The job runs from 3 s to 15 s. Thus the read at 10 s shows the runner and its job.
+    addRun(at, 100, [12_000]);
     await at.turn(5000);
     failing = true;
     const second = await at.turn(5000);
@@ -319,13 +325,16 @@ describe("noteReport: random worlds", () => {
 
         for (const record of at.machines) {
           const asked = eventOf(at, ["asked"], { name: record.machine });
-          if (record.asked !== null) expect(record.asked).toBe(asked);
+          // The world has no machine for a refused request. The dispatcher ends the life of the machine with `provider.failed`.
+          if (record.asked !== null && asked === undefined) expect(record.end).toBe("provider.failed");
+          else if (record.asked !== null) expect(record.asked).toBe(asked);
           const truth: [Moment | null, number | undefined][] = [
             [record.made, eventOf(at, ["operating"], { name: record.machine })],
             [record.registered, eventOf(at, ["online"], { name: record.machine })],
             [record.started, eventOf(at, ["job-started", "job-refused"], { name: record.machine })],
-            [record.destroyed, eventOf(at, ["gone"], { name: record.machine })],
           ];
+          // A machine that the world did not make has no time of its end.
+          if (asked !== undefined || record.asked === null) truth.push([record.destroyed, eventOf(at, ["gone"], { name: record.machine })]);
           if (record.end === "job.completed") truth.push([record.ended, eventOf(at, ["job-ended", "job-refused", "job-lost"], { name: record.machine })]);
           for (const [moment, time] of truth) {
             if (moment === null) continue;

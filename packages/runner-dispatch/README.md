@@ -475,12 +475,12 @@ for (const record of note.machines) log(record, machineSpans(record));
 for (const record of note.jobs) log(record, jobSpans(record));
 ```
 
-- A record `machine-measure/1` has the times of the request, the operation, the connection of the runner, the job, the end of the work and the end of the machine.
+- A record `machine-measure/1` has the times of the events of a machine. The events are the request, the operation, the connection of the runner, the job, the end of the work and the end of the machine.
 - A record `job-measure/1` has the times that the views showed the job in the queue, started and complete.
 - A dispatcher sees an event only in a read. Thus each time is a `Moment`: the event came from `after` to `at`.
 - `after` is the start of the last read that did not show the event. `at` is the end of the reads of the pass that showed it.
 - The time of an act of the dispatcher is exact. Examples are the request for a machine and a timer.
-- `machineSpans` gives the bounds of the start time, the boot time, the idle time, the job time, the teardown time and the life of a machine.
+- `machineSpans` gives the bounds of the spans of a machine: the start, the boot, the idle time, the job, the teardown and the life.
 - `jobSpans` gives the bounds of the queue time and the run time of a job.
 - The report of a pass gives the facts: `read`, `listed`, `viewed`, `jobs` and `asked`.
 
