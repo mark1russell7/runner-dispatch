@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@mark1russell7/runner-dispatch": "workspace:*",
-    "@mark1russell7/service": "^0.8.6"
+    "@mark1russell7/service": "^0.8.6",
+    "@procedures/http": "^0.55.0"
   },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",

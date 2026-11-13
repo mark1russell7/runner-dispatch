@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./github": "./src/github.ts",
     "./proxmox": "./src/proxmox.ts",
+    "./proxmox-client": "./src/proxmox-client.ts",
     "./testing": "./src/testing.ts",
     "./package.json": "./package.json"
   },
