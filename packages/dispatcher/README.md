@@ -118,7 +118,28 @@ The transport of `src/transport.ts` sends each exchange with `httpRequest` of `@
 - It does not follow a redirect, thus the token goes to no other host.
 - Give the certificate authority of the host to `NODE_EXTRA_CA_CERTS`.
 
-The command line of the program comes in part 3 of item R5. It uses the REST client of `@procedures/gh`.
+## The command line
+
+The entry `src/bin.ts` is the command of the program:
+
+```sh
+export RUNNER_DISPATCH_GITHUB_TOKEN=...
+export RUNNER_DISPATCH_PROXMOX_TOKEN=...
+node src/bin.ts /etc/runner-dispatch/program.json --check
+node src/bin.ts /etc/runner-dispatch/program.json
+```
+
+- With `--check`, the command prepares the program and writes its log lines. It then writes the line `{"event":"checked"}` and stops before the first pass.
+- Without `--check`, the command starts the service. A `SIGTERM` or a `SIGINT` starts the shutdown of the service.
+- The exit code 0 is a stop with no error, or a check with no problem. The exit code 1 is a problem, and 2 is a bad command.
+- Each log line goes to stdout as one line of JSON. Each problem goes to stderr, with each problem of the document and of the tokens together.
+
+The command makes the ports of Node.js in `src/cli.ts`:
+
+- `restGitHubApi` puts the GitHub API of the dispatcher on the REST client of `@procedures/gh`. The client sends a conditional request for a stored answer, and it keeps the limits of the rate of GitHub.
+- The transport of `src/transport.ts` sends each exchange to Proxmox VE.
+- `fileExists` examines the stop file. An error that is not `ENOENT` makes the pass fail, and the stop switch does not change.
+- Each line of each output goes through `redactSecrets` of `@mark1russell7/text/redact` with the two tokens. Thus an error text from a library also has no token.
 
 ## The tests
 
@@ -141,3 +162,15 @@ Tests hold the program:
 - The probe server answers the liveness on its port, and the shutdown closes the port.
 - The transport refuses another origin and a redirect, and it gives the reason phrase of an error.
 - 17 changes of the checks of the program and the transport make the tests fail.
+
+Tests hold the command line:
+
+- `parseCommand` reads each form of the command, and it refuses each bad command with the exit code 2.
+- These give the exit code 1: a file that the command cannot read, a file that is not JSON, and a bad document or token.
+- A check writes the lines of the runner group and of the declaration, then the line `checked`. It starts nothing.
+- An error text with a token, in each form, gets the mark `[secret]` in place of the token.
+- A program on fakes makes a machine for a job, and a `SIGTERM` gives the exit code 0. No output has a token or a one-job configuration.
+- `restGitHubApi` sends the token, the user agent and the query, and it gives the stored answer for a 304.
+- `fileExists` gives `false` for a file that is not there, and it gives each other error to the caller.
+
+The shared fakes of the tests are in `src/fixtures.ts`.
