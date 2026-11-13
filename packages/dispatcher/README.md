@@ -75,14 +75,50 @@ The check `passes-progress` fails when no pass ended in the time `pass`. It gate
 - The time `close` is less than the time of the profile for the close of the transports.
 - `lint` of `@mark1russell7/service` examines these two times in the declaration. It gives the finding `violated` for a time that is too long.
 
-## What the program adds
+## The program
 
-The program of the service is not in this package yet. It comes with item R5 of the roadmap, and it adds these parts:
+The entry `src/program.ts` joins the parts into one program. A program is one document `dispatcher-program/1`, with no secret:
 
-- It reads the three documents: the trust rules, the times of a machine and the settings of a dispatcher.
-- It gives the service the source of GitHub and the provider of the host.
-- It reads the liveness of the service: a probe server of `@mark1russell7/service`, or a watchdog of the supervisor.
-- It examines the declaration with `lint` before it starts the service, and it refuses a finding `violated`.
+```json
+{
+  "format": "dispatcher-program/1",
+  "rules": { "format": "trust-rules/1", "repositories": ["octo/app"], "events": ["push"], "actors": ["octo"] },
+  "times": { "format": "machine-times/1", "make": 300, "register": 300, "idle": 120, "job": 3600, "retry": 5, "retryMax": 40, "pass": 60 },
+  "settings": { "format": "dispatch-settings/1", "prefix": "rd", "capacity": 2, "sizes": ["small"], "standard": "small" },
+  "loop": { "sleep": 15, "bound": 3, "retry": 2, "retryMax": 10, "close": 0.5 },
+  "profile": "daemon",
+  "stop": "/etc/runner-dispatch/stop",
+  "github": { "organization": "octo", "runnerGroup": 3 },
+  "proxmox": { "url": "https://pve.example:8006", "pool": "runners", "sizes": { "small": { "node": "pve1", "template": 9000 } } },
+  "probes": { "port": 9464 }
+}
+```
+
+- The fields `rules`, `times` and `settings` are the three documents of the package `@mark1russell7/runner-dispatch`.
+- The loop keeps the time `pass` of the machines. `parseProgram` gives a problem for a loop that breaks it.
+- The drain of each profile has a cap of 4 s. Thus the bound of a pass is less than 4 s, or `lint` finds it `violated`.
+- The field `stop` is the path of the stop file. When the file is there, the stop switch is on.
+- With an organization, the field `runnerGroup` is necessary. The field `github.url` has the default `https://api.github.com`.
+- Each size of the settings has a template in `proxmox.sizes`. The field `proxmox.files` changes the two paths in the machine.
+- The field `probes` is optional. It starts a probe server of `@mark1russell7/service/http` on its port, with the default host `127.0.0.1`.
+
+The two secrets come from the environment: `RUNNER_DISPATCH_GITHUB_TOKEN` and `RUNNER_DISPATCH_PROXMOX_TOKEN`. `readSecrets` names a variable in a problem, but not its value.
+
+`prepareProgram` starts nothing. It does these steps:
+
+1. With an organization, it checks the runner group before the first pass. A group that admits a repository with no service, or a public repository, stops the program.
+2. It makes the client of GitHub, the client of Proxmox VE with its transport, the source and the provider.
+3. It declares the service, and it examines the declaration with `lint` on a host with no platform of pods. A finding `violated` stops the program.
+
+`runProgram` then starts the service. The program writes JSON lines: the check of the runner group, the findings of `lint`, each pass that changes something and each failure. No line has a token or a one-job configuration.
+
+The transport of `src/transport.ts` sends each exchange with `httpRequest` of `@procedures/http`:
+
+- It sends an exchange only to the origin of the URL of Proxmox VE. The host policy lets it reach only that host and port.
+- It does not follow a redirect, thus the token goes to no other host.
+- Give the certificate authority of the host to `NODE_EXTRA_CA_CERTS`.
+
+The command line of the program comes in part 3 of item R5. It uses the REST client of `@procedures/gh`.
 
 ## The tests
 
@@ -95,3 +131,13 @@ Tests start the service on the fake world of `@mark1russell7/runner-dispatch/tes
 - The stop switch destroys each machine.
 - The liveness fails when a pass does not end, and it recovers after the pass ends.
 - `lint` gives no finding `violated` for the declaration with each profile.
+
+Tests hold the program:
+
+- `parseProgram` gives a problem for each bad field, and `readSecrets` gives no value of a secret in a problem.
+- A runner group that admits too much stops the program before the declaration.
+- A loop that the drain of the profile can cut gives a finding `violated`, and it stops the program.
+- A program on a fake world, a fake GitHub and a fake Proxmox VE makes a machine for a job. The machine gets the one-job configuration, and no log line has it.
+- The probe server answers the liveness on its port, and the shutdown closes the port.
+- The transport refuses another origin and a redirect, and it gives the reason phrase of an error.
+- 17 changes of the checks of the program and the transport make the tests fail.

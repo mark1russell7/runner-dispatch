@@ -594,6 +594,27 @@ const provider = createProxmoxProvider({
 - It trusts the certificate authority of the cluster.
 - It throws only when it gets no answer. Each status is an answer.
 
+### The client of the API
+
+The entry `@mark1russell7/runner-dispatch/proxmox-client` has a client of this kind on a transport port. The transport sends one HTTP exchange.
+
+```ts
+import { createProxmoxClient } from "@mark1russell7/runner-dispatch/proxmox-client";
+
+const api = createProxmoxClient({ url: "https://pve.example:8006", token, transport });
+```
+
+- The token has the form `USER@REALM!TOKENID=SECRET`. The client sends it in the header `authorization: PVEAPIToken=<token>`.
+- The URL has the scheme `https`, a host and a port, and no user, path, query or fragment.
+- The client encodes each part of a path, and it refuses the parts `.` and `..`. A task id keeps its characters `:` and `@`.
+- The parameters of a `GET` or a `DELETE` go in the query. The parameters of a `POST` or a `PUT` go in a form body. The client sorts them by name.
+- The message of an answer is the reason phrase of the status line. Proxmox VE puts the text of an error there.
+- The data of an answer is the field `data` of the JSON body. A body of a status 2xx that is not JSON is not an answer, thus the client throws.
+- No error text and no message has the token. The client replaces it with `[token]`, and it cuts a message to 500 characters.
+- The client uses no type of a platform: no `URL` and no `fetch`. Thus it operates on each runtime.
+
+The transport sends the exchange with no change, and it does not follow a redirect. The program of `@runner-dispatch/dispatcher` has a transport on Node.js.
+
 ### The steps of a machine
 
 | Step | Request | The provider waits for |
@@ -659,7 +680,7 @@ Give these privileges to the token and to its user. A token with separate privil
 
 ### What the provider does not do yet
 
-- A test on a real host measures the steps, the privileges and the times. The program of the service and its real client come with item R5 of the roadmap.
+- A test on a real host measures the steps, the privileges and the times. The program of the service is in `@runner-dispatch/dispatcher`.
 
 ## The tests
 
@@ -720,3 +741,11 @@ Tests hold the Proxmox provider, on a fake API of Proxmox VE:
   - The provider changes no VM outside its own machines, and it changes the template only by a clone.
   - After a destroy of each machine, the pool has only the VM of a different owner.
 - Four changes of the provider make the tests fail: no write of the configuration, no tag check, no stop check and no tag removal.
+
+Tests hold the client of the API:
+
+- Each method puts its parameters in the correct place, with the token in a header.
+- A property test sends random paths and parameters through a wire. The fake Proxmox VE reads the same path and the same parameters.
+- A property test holds the form encoding. For each code unit and each lone surrogate, the body agrees with `URLSearchParams`.
+- No error text and no message has the token.
+- The provider makes, delivers and destroys a machine on the fake Proxmox VE through the client and the wire.
