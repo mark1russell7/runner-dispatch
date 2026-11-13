@@ -14,7 +14,7 @@
   "dependencies": {
     "@mark1russell7/runner-dispatch": "workspace:*",
     "@mark1russell7/service": "^0.8.6",
-    "@mark1russell7/text": "^0.0.4",
+    "@mark1russell7/text": "^0.0.5",
     "@procedures/gh": "^0.55.1",
     "@procedures/http": "^0.55.0"
   },
