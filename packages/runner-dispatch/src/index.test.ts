@@ -18,6 +18,7 @@ describe("the entry", () => {
       "TRUST_RULES_FORMAT",
       "advance",
       "checkJob",
+      "checkSettingsDocument",
       "createDispatcher",
       "decide",
       "due",

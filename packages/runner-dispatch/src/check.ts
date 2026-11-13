@@ -1,4 +1,4 @@
-import { decide, isObject, isRepositoryName, parseTrustRules, show, type RefusalRule, type TrustRules } from "./policy.ts";
+import { decide, isObject, isRepositoryName, parseTrustRules, show, TRUST_RULES_FORMAT, type RefusalRule, type TrustRules } from "./policy.ts";
 import { isId, sameName, sameRun, type RunKey, type RunRecord } from "./records.ts";
 
 /**
@@ -135,6 +135,32 @@ export function checkJob(settings: CheckSettings, environment: JobEnvironment, e
     refusals.push({ rule: "machine", text: "The run of the job is not the run of this machine." });
   }
   return { pass: refusals.length === 0, run, refusals };
+}
+
+/** This type is the document of check settings, as a machine reads it from a JSON file. */
+export interface CheckSettingsDocument {
+  /** This field is the format id of the document. */
+  readonly format: typeof CHECK_SETTINGS_FORMAT;
+  /** This field has the trust rules, with their format id. */
+  readonly rules: TrustRules & { readonly format: typeof TRUST_RULES_FORMAT };
+  /** This field is the run that the machine serves. */
+  readonly run: RunKey;
+}
+
+/**
+ * This function gives the document of the check settings of one machine. `parseCheckSettings` reads it back to the same settings.
+ * A provider writes the document on the machine as JSON.
+ *
+ * @param settings - The settings of the check of the machine
+ * @returns The document, with the format id of the settings and of the trust rules
+ */
+export function checkSettingsDocument(settings: CheckSettings): CheckSettingsDocument {
+  const { rules, run } = settings;
+  return {
+    format: CHECK_SETTINGS_FORMAT,
+    rules: { format: TRUST_RULES_FORMAT, repositories: [...rules.repositories], events: [...rules.events], actors: [...rules.actors] },
+    run: { repository: run.repository, runId: run.runId, runAttempt: run.runAttempt },
+  };
 }
 
 /**

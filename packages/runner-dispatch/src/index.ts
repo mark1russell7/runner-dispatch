@@ -25,11 +25,13 @@ export {
 export {
   CHECK_SETTINGS_FORMAT,
   checkJob,
+  checkSettingsDocument,
   parseCheckSettings,
   readJobRun,
   type CheckRefusal,
   type CheckRule,
   type CheckSettings,
+  type CheckSettingsDocument,
   type CheckSettingsResult,
   type JobCheck,
   type JobEnvironment,

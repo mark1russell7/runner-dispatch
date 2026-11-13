@@ -747,3 +747,5 @@ export function fakeGitHubApi(world: FakeWorld, options: FakeGitHubOptions = {})
     requests: (): readonly GitHubRequest[] => [...log],
   };
 }
+
+export { fakeProxmox, type FakeProxmox, type FakeProxmoxOptions, type FakeTaskKind, type FakeVm } from "./proxmox-fake.ts";
