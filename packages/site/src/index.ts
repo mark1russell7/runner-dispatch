@@ -27,7 +27,7 @@ copy.addEventListener("click", () => {
   void copyText(copy, byId("install").textContent ?? "");
 });
 
-/** This function makes an element with a class and a text. It never parses HTML, so a field of the visitor stays text. */
+/** This function makes an element with a class and a text. It does not parse HTML, so a field of the visitor stays text. */
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   if (className !== "") node.className = className;
