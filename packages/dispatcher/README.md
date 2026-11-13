@@ -133,6 +133,7 @@ node src/bin.ts /etc/runner-dispatch/program.json
 - Without `--check`, the command starts the service. A `SIGTERM` or a `SIGINT` starts the shutdown of the service.
 - The exit code 0 is a stop with no error, or a check with no problem. The exit code 1 is a problem, and 2 is a bad command.
 - Each log line goes to stdout as one line of JSON. Each problem goes to stderr, with each problem of the document and of the tokens together.
+- The line `machine-measure` has the record of a machine at the end of its life, with its spans. The line `job-measure` has the record of a job at its end.
 
 The command makes the ports of Node.js in `src/cli.ts`:
 

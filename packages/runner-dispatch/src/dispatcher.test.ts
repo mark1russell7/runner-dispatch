@@ -171,6 +171,11 @@ describe("a dispatcher on a fake world: one job", () => {
     const first = await at.turn();
     expect(first).toEqual({
       at: 0,
+      read: 0,
+      listed: true,
+      viewed: [REPO],
+      jobs: [{ repository: REPO, runId: 100, runAttempt: 1, jobId: 1, status: "queued", runner: null }],
+      asked: [{ machine: M0, at: 0 }],
       stopped: false,
       steps: [],
       adopted: [],

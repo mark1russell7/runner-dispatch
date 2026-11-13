@@ -316,6 +316,9 @@ describe("a program on fakes", () => {
 
     const passes = run.lines.filter((line) => line.event === "pass");
     expect(passes.length).toBeGreaterThan(0);
+    // The job ended in the 30 seconds. Thus its record is in the log, with the bounds of its times.
+    const measured = run.lines.filter((line) => line.event === "job-measure");
+    expect(measured).toMatchObject([{ record: { format: "job-measure/1", repository: REPO, runId: 100, last: "completed" }, spans: { run: { low: expect.any(Number) } } }]);
     const logged = JSON.stringify(run.lines);
     for (const secret of [...secrets, GITHUB_TOKEN, PROXMOX_TOKEN, "0123-secret-of-proxmox"]) expect(logged).not.toContain(secret);
 

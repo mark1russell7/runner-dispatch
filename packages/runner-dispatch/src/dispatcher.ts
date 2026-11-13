@@ -13,7 +13,7 @@ import {
   type RepositoryObservation,
 } from "./plan.ts";
 import { parseTrustRules, show, TRUST_RULES_FORMAT, type TrustRules } from "./policy.ts";
-import type { JobSource, MachineProvider, ProviderMachine, StopSignal } from "./ports.ts";
+import type { JobSource, JobStatus, MachineProvider, ProviderMachine, StopSignal } from "./ports.ts";
 import { runLabel, sameName, sameRun, type MachineRecord, type RunKey } from "./records.ts";
 import { machineName, runnerLabels, settingsProblems, type DispatchSettings } from "./settings.ts";
 
@@ -50,10 +50,44 @@ export interface PassFailure {
   readonly text: string;
 }
 
+/** This record is one job of a view of a pass, with its status and its runner. */
+export interface JobSight {
+  /** This field is the repository of the job, as `owner/name`. */
+  readonly repository: string;
+  /** This field is the id of the run of the job. */
+  readonly runId: number;
+  /** This field is the number of the try of the run. */
+  readonly runAttempt: number;
+  /** This field is the id of the job. */
+  readonly jobId: number;
+  /** This field is the status of the job. */
+  readonly status: JobStatus;
+  /** This field is the name of the runner that has the job. It is `null` when no runner has it. */
+  readonly runner: string | null;
+}
+
+/** This record is the time of the request for one machine. */
+export interface MachineAsk {
+  /** This field is the name of the machine. */
+  readonly machine: string;
+  /** This field is the time of the request, in milliseconds. */
+  readonly at: number;
+}
+
 /** This record tells what one pass of the dispatcher saw and did. It has no one-job configuration. */
 export interface PassReport {
-  /** This field is the time of the pass, in milliseconds. */
+  /** This field is the time of the pass, in milliseconds. The reads of the pass start at this time, and the plan uses it. */
   readonly at: number;
+  /** This field is the time at the end of the reads of the pass, in milliseconds. The facts of the pass are from a time from `at` to `read`. */
+  readonly read: number;
+  /** This field is `true` when the pass read the machines of the provider. */
+  readonly listed: boolean;
+  /** This list has each repository that the pass read the view of. */
+  readonly viewed: readonly string[];
+  /** This list has each job of the views of the pass. */
+  readonly jobs: readonly JobSight[];
+  /** This list has the time of the request for each machine of `made`. */
+  readonly asked: readonly MachineAsk[];
   /** This field is `true` when the stop switch was on. It is `null` when the pass could not read the switch. */
   readonly stopped: boolean | null;
   /** This list has each transition of the pass, in its sequence. */
@@ -162,12 +196,21 @@ export function createDispatcher<Signal extends StopSignal = StopSignal>(options
       }),
     );
 
+    const read = options.now();
+    const viewed = views.flatMap((each) => (each.view === null ? [] : [each.repository]));
+    const jobs: JobSight[] = views.flatMap((each) =>
+      (each.view?.runs ?? []).flatMap((run) =>
+        run.jobs.map(({ repository, runId, runAttempt, jobId, status, runner }) => ({ repository, runId, runAttempt, jobId, status, runner })),
+      ),
+    );
+
     const planned = plan(state, { now: at, stopped, views, machines }, { rules, times, settings });
     state = planned.state;
     const steps: LifeStep[] = [...planned.steps];
     const destroys: string[] = [];
     const removals: PlannedRemoval[] = [];
     const made: MachineRecord[] = [];
+    const asked: MachineAsk[] = [];
     let cut = false;
     const open = (): boolean => {
       if (signal.aborted) cut = true;
@@ -219,6 +262,7 @@ export function createDispatcher<Signal extends StopSignal = StopSignal>(options
       const life = startLife(options.now());
       state = { lives: [...state.lives, { machine, life }], failures: state.failures };
       made.push(machine);
+      asked.push({ machine: name, at: life.at });
       try {
         await provider.make({ machine, configuration, check: { rules, run } }, signal);
       } catch (error) {
@@ -244,6 +288,11 @@ export function createDispatcher<Signal extends StopSignal = StopSignal>(options
 
     return {
       at,
+      read,
+      listed: machines !== null,
+      viewed,
+      jobs,
+      asked,
       stopped,
       steps,
       adopted: planned.adopted,
