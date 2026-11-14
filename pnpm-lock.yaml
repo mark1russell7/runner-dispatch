@@ -269,6 +269,10 @@ importers:
         version: 4.6.7
 
   packages/site:
+    dependencies:
+      '@mark1russell7/runner-dispatch':
+        specifier: workspace:*
+        version: link:../runner-dispatch
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0

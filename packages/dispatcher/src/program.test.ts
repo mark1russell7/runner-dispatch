@@ -316,6 +316,18 @@ describe("a program on fakes", () => {
 
     const passes = run.lines.filter((line) => line.event === "pass");
     expect(passes.length).toBeGreaterThan(0);
+    // The fake Proxmox VE starts no runner, so the job stays in the queue, and its record is not complete.
+    expect(run.lines.filter((line) => line.event === "job-measure")).toEqual([]);
+    // After the cancel, the view does not show the run. Thus the record of its job is complete, and it goes to the log.
+    run.world.cancelRun({ repository: REPO, runId: 100, runAttempt: 1 });
+    await run.advance(10_000);
+    const measured = run.lines.filter((line) => line.event === "job-measure");
+    expect(measured).toMatchObject([
+      {
+        record: { format: "job-measure/1", repository: REPO, runId: 100, runAttempt: 1, started: null, completed: { at: expect.any(Number) }, runner: null, last: "queued" },
+        spans: { queue: null, run: null },
+      },
+    ]);
     const logged = JSON.stringify(run.lines);
     for (const secret of [...secrets, GITHUB_TOKEN, PROXMOX_TOKEN, "0123-secret-of-proxmox"]) expect(logged).not.toContain(secret);
 

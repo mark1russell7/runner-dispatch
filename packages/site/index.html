@@ -27,6 +27,71 @@
   <h1>runner-dispatch</h1>
   <p class="lead">One-job CI runners for trusted jobs: a source of queued jobs, trust rules as data, and a provider that makes one machine for one job.</p>
 
+  <section aria-labelledby="trust-title">
+    <h2 id="trust-title">Which runs get a machine</h2>
+    <p>The dispatcher makes a machine only for a trusted run. Pick a sample run, or change a field or a rule. At each change, the page calls <code>decide</code> of the package.</p>
+    <div id="scenarios" class="scenarios" role="group" aria-label="Sample runs"></div>
+    <div class="panels">
+      <form id="run-form" class="panel fields" autocomplete="off">
+        <h3>The run</h3>
+        <label for="f-repository">Repository</label>
+        <input id="f-repository" spellcheck="false">
+        <label for="f-event">Event</label>
+        <input id="f-event" list="event-names" spellcheck="false">
+        <datalist id="event-names">
+          <option value="push"></option>
+          <option value="pull_request"></option>
+          <option value="pull_request_target"></option>
+          <option value="workflow_dispatch"></option>
+          <option value="workflow_run"></option>
+          <option value="schedule"></option>
+        </datalist>
+        <label for="f-headRepository">Head repository <span class="hint">(the repository of the code: a fork has a different one)</span></label>
+        <input id="f-headRepository" spellcheck="false">
+        <label for="f-actor">Account that started the run</label>
+        <input id="f-actor" spellcheck="false">
+        <label for="f-triggeringActor">Account that started this try</label>
+        <input id="f-triggeringActor" spellcheck="false">
+        <label for="f-attempt">Number of the try</label>
+        <input id="f-attempt" type="number" min="1" step="1" inputmode="numeric">
+      </form>
+      <div class="panel">
+        <h3><label for="rules">The trust rules</label></h3>
+        <textarea id="rules" rows="13" spellcheck="false" aria-describedby="rules-problems"></textarea>
+        <ul id="rules-problems" class="problems"></ul>
+      </div>
+    </div>
+    <div id="verdict" class="verdict" role="status"></div>
+    <ol id="checks" class="checks" aria-label="The rules of the policy"></ol>
+  </section>
+
+  <section aria-labelledby="life-title">
+    <h2 id="life-title">The life of one machine</h2>
+    <p>Each machine does one job, and then the dispatcher destroys it. Each state has a timer, so no machine stays forever. Send events, and see the state, the timer and the requests of the dispatcher. The page uses <code>MACHINE_LIFECYCLE</code>, <code>advance</code> and <code>waitOf</code> of the package.</p>
+    <ol id="states" class="states" aria-label="The states of a machine"></ol>
+    <p id="state-note" class="state-note" role="status"></p>
+    <div class="panel timer">
+      <p id="timer-text"></p>
+      <div id="track" class="track" aria-hidden="true"><span id="timer-window" class="window"></span><span id="delay-mark" class="mark"></span></div>
+      <label id="delay-label" for="delay">Time to the next event: <output id="delay-out" for="delay"></output></label>
+      <input id="delay" type="range" min="0" step="1">
+    </div>
+    <div id="events" class="events" role="group" aria-label="Events from outside"></div>
+    <div class="actions">
+      <button id="wait" type="button">Wait for the timer</button>
+      <button id="restart" type="button">Start again</button>
+    </div>
+    <h3>The log</h3>
+    <ol id="log" class="log"></ol>
+    <details class="panel">
+      <summary>The times of a machine</summary>
+      <p class="note">Each time is in seconds. A change starts the life again.</p>
+      <div id="times" class="times"></div>
+      <ul id="times-problems" class="problems"></ul>
+    </details>
+    <p id="longest"></p>
+  </section>
+
   <h2>Install</h2>
   <div class="command">
     <code id="install">pnpm add @mark1russell7/runner-dispatch</code>
