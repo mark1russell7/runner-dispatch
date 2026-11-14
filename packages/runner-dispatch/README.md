@@ -1,6 +1,10 @@
 # @mark1russell7/runner-dispatch
 
-The records, the trust rules, the check on the machine and the life of a machine of one-job CI runners. It also has the passes of a dispatcher, the GitHub source and the Proxmox provider. The package is not on npm yet.
+The records, the trust rules, the check on the machine and the life of a machine of one-job CI runners. It also has the passes of a dispatcher, the GitHub source and the Proxmox provider.
+
+```sh
+pnpm add @mark1russell7/runner-dispatch
+```
 
 A dispatcher gives a runner only to a job of a trusted run. This package has the data of that decision, and the function that decides. It also has the check that a machine does before the first step of a job. It has the life of a machine as a state machine. It has no network code. The GitHub source and the Proxmox provider send their requests through clients that the host gives.
 
@@ -148,6 +152,8 @@ exec /opt/actions-runner/externals/node24/bin/node \
 ```
 
 The argument is the path of the settings file. The program reads the event file from the path in `GITHUB_EVENT_PATH`.
+
+The package on npm has the built program `build/cli/job-started.js`, and its command is `runner-dispatch-job-started`. An image can install the package in `/opt/runner-dispatch` with npm. Then the script starts `/opt/runner-dispatch/node_modules/@mark1russell7/runner-dispatch/build/cli/job-started.js`. The built program imports no package, as the source.
 
 - The runner program has its own Node.js in its folder `externals`. Thus the machine needs no second Node.js for the check.
 - Each path of the script is absolute. Thus `PATH` does not select the Node.js or the program.
