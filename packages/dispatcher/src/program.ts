@@ -7,6 +7,10 @@ import {
   parseMachineTimes,
   parseTrustRules,
   type DispatchSettings,
+  type JobMeasure,
+  type JobSpans,
+  type MachineMeasure,
+  type MachineSpans,
   type MachineTimes,
   type MeasureState,
   type PassReport,
@@ -250,7 +254,9 @@ export function readSecrets(env: Readonly<Record<string, string | undefined>>): 
 
 /** This record is one line of the log of a program. No line has a secret or a one-job configuration. */
 export type LogLine =
-  | { readonly event: "pass"; readonly report: Omit<PassReport, "lives">; readonly machines: number }
+  | { readonly event: "pass"; readonly report: Omit<PassReport, "lives" | "jobs">; readonly machines: number; readonly jobs: number }
+  | { readonly event: "machine-measure"; readonly record: MachineMeasure; readonly spans: MachineSpans }
+  | { readonly event: "job-measure"; readonly record: JobMeasure; readonly spans: JobSpans }
   | { readonly event: "pass-failed"; readonly failures: number; readonly text: string }
   | { readonly event: "problem"; readonly text: string }
   | { readonly event: "runner-group"; readonly check: RunnerGroupCheck }
