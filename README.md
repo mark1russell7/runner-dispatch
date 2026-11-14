@@ -48,7 +48,7 @@ The dispatcher asks GitHub for the one-job configuration of each runner. The per
 
 | Package | What it has |
 | --- | --- |
-| [`@mark1russell7/runner-dispatch`](packages/runner-dispatch) | The records of a run, a job and a machine, the trust rules as data, the policy, the check on the machine with its job-started program, and the life of a machine as a state machine. It also has the settings of a dispatcher, the two ports, the plan of a pass, the GitHub source, the Proxmox provider and fake worlds for tests. It is not on npm yet. |
+| [`@mark1russell7/runner-dispatch`](packages/runner-dispatch) | The records of a run, a job and a machine, the trust rules as data, the policy, the check on the machine with its job-started program, and the life of a machine as a state machine. It also has the settings of a dispatcher, the two ports, the plan of a pass, the GitHub source, the Proxmox provider and fake worlds for tests. It is on npm. |
 | [`@runner-dispatch/dispatcher`](packages/dispatcher) | The dispatcher as one service of `@mark1russell7/service`: the loop of the passes, its times, its liveness check and its shutdown. The program comes with the first source and the first provider. It is private. |
 
 Other packages give the general parts:
