@@ -1,0 +1,1187 @@
+# The public API of @mark1russell7/runner-dispatch
+#
+# The names of each entry of the exports field, and the declaration of each name, without comments
+# and private members. The command `api-report check` compares this file with the built .d.ts files.
+# To accept a change of the API, start the build, then `api-report update`, and review the diff.
+
+## . (build/index.d.ts): names
+
+CHECK_SETTINGS_FORMAT: build/ports.chunk.d.ts#CHECK_SETTINGS_FORMAT
+type CheckRefusal: build/ports.chunk.d.ts#CheckRefusal
+type CheckRule: build/ports.chunk.d.ts#CheckRule
+type CheckSettings: build/ports.chunk.d.ts#CheckSettings
+type CheckSettingsDocument: build/ports.chunk.d.ts#CheckSettingsDocument
+type CheckSettingsResult: build/ports.chunk.d.ts#CheckSettingsResult
+DISPATCH_CAPACITY_MAX: build/index.d.ts#DISPATCH_CAPACITY_MAX
+DISPATCH_SETTINGS_FORMAT: build/index.d.ts#DISPATCH_SETTINGS_FORMAT
+type Decision: build/ports.chunk.d.ts#Decision
+type DispatchConfig: build/index.d.ts#DispatchConfig
+type DispatchLife: build/index.d.ts#DispatchLife
+type DispatchSettings: build/index.d.ts#DispatchSettings
+type DispatchSettingsResult: build/index.d.ts#DispatchSettingsResult
+type DispatchState: build/index.d.ts#DispatchState
+type Dispatcher: build/index.d.ts#Dispatcher
+type DispatcherOptions: build/index.d.ts#DispatcherOptions
+EMPTY_MEASURES: build/index.d.ts#EMPTY_MEASURES
+EMPTY_STATE: build/index.d.ts#EMPTY_STATE
+JOB_MEASURE_FORMAT: build/index.d.ts#JOB_MEASURE_FORMAT
+type JobCheck: build/ports.chunk.d.ts#JobCheck
+type JobEnvironment: build/ports.chunk.d.ts#JobEnvironment
+type JobMeasure: build/index.d.ts#JobMeasure
+type JobRecord: build/ports.chunk.d.ts#JobRecord
+type JobSight: build/index.d.ts#JobSight
+type JobSource: build/ports.chunk.d.ts#JobSource
+type JobSpans: build/index.d.ts#JobSpans
+type JobStartedResult: build/index.d.ts#JobStartedResult
+type JobStatus: build/ports.chunk.d.ts#JobStatus
+type LifeStep: build/index.d.ts#LifeStep
+type LongestLife: build/index.d.ts#LongestLife
+MACHINE_ACTIONS: build/index.d.ts#MACHINE_ACTIONS
+MACHINE_EVENTS: build/index.d.ts#MACHINE_EVENTS
+MACHINE_LIFECYCLE: build/index.d.ts#MACHINE_LIFECYCLE
+MACHINE_MEASURE_FORMAT: build/index.d.ts#MACHINE_MEASURE_FORMAT
+MACHINE_STATES: build/index.d.ts#MACHINE_STATES
+MACHINE_TIMES_FORMAT: build/index.d.ts#MACHINE_TIMES_FORMAT
+MACHINE_TIME_MAX: build/index.d.ts#MACHINE_TIME_MAX
+type MachineAction: build/index.d.ts#MachineAction
+type MachineAsk: build/index.d.ts#MachineAsk
+type MachineEvent: build/index.d.ts#MachineEvent
+type MachineLife: build/index.d.ts#MachineLife
+type MachineMeasure: build/index.d.ts#MachineMeasure
+type MachineProvider: build/ports.chunk.d.ts#MachineProvider
+type MachineRecord: build/ports.chunk.d.ts#MachineRecord
+type MachineRequest: build/ports.chunk.d.ts#MachineRequest
+type MachineSpans: build/index.d.ts#MachineSpans
+type MachineState: build/index.d.ts#MachineState
+type MachineStatus: build/ports.chunk.d.ts#MachineStatus
+type MachineStep: build/index.d.ts#MachineStep
+type MachineTimes: build/index.d.ts#MachineTimes
+type MachineTimesResult: build/index.d.ts#MachineTimesResult
+type MachineWait: build/index.d.ts#MachineWait
+type MeasureNote: build/index.d.ts#MeasureNote
+type MeasureState: build/index.d.ts#MeasureState
+type Moment: build/index.d.ts#Moment
+OUTSIDE_INPUT_EVENTS: build/ports.chunk.d.ts#OUTSIDE_INPUT_EVENTS
+type Observation: build/index.d.ts#Observation
+type PassFailure: build/index.d.ts#PassFailure
+type PassReport: build/index.d.ts#PassReport
+type PassRequest: build/index.d.ts#PassRequest
+type Plan: build/index.d.ts#Plan
+type PlannedMake: build/index.d.ts#PlannedMake
+type PlannedRemoval: build/index.d.ts#PlannedRemoval
+type PlannedWait: build/index.d.ts#PlannedWait
+type ProviderMachine: build/ports.chunk.d.ts#ProviderMachine
+type Refusal: build/ports.chunk.d.ts#Refusal
+type RefusalRule: build/ports.chunk.d.ts#RefusalRule
+type RepositoryObservation: build/index.d.ts#RepositoryObservation
+type RepositoryView: build/ports.chunk.d.ts#RepositoryView
+type RunFailures: build/index.d.ts#RunFailures
+type RunKey: build/ports.chunk.d.ts#RunKey
+type RunLabelParts: build/ports.chunk.d.ts#RunLabelParts
+type RunRecord: build/ports.chunk.d.ts#RunRecord
+type RunnerRegistration: build/ports.chunk.d.ts#RunnerRegistration
+type RunnerRequest: build/ports.chunk.d.ts#RunnerRequest
+type SourceJob: build/ports.chunk.d.ts#SourceJob
+type SourceRun: build/ports.chunk.d.ts#SourceRun
+type SourceRunner: build/ports.chunk.d.ts#SourceRunner
+type Span: build/index.d.ts#Span
+type StopSignal: build/ports.chunk.d.ts#StopSignal
+TRUST_RULES_FORMAT: build/ports.chunk.d.ts#TRUST_RULES_FORMAT
+type TrustRules: build/ports.chunk.d.ts#TrustRules
+type TrustRulesResult: build/ports.chunk.d.ts#TrustRulesResult
+type ViewRead: build/index.d.ts#ViewRead
+type WaitReason: build/index.d.ts#WaitReason
+advance: build/index.d.ts#advance
+checkJob: build/ports.chunk.d.ts#checkJob
+checkSettingsDocument: build/ports.chunk.d.ts#checkSettingsDocument
+createDispatcher: build/index.d.ts#createDispatcher
+decide: build/ports.chunk.d.ts#decide
+due: build/index.d.ts#due
+foldName: build/ports.chunk.d.ts#foldName
+isId: build/ports.chunk.d.ts#isId
+jobSpans: build/index.d.ts#jobSpans
+jobStarted: build/index.d.ts#jobStarted
+longestLife: build/index.d.ts#longestLife
+machineName: build/index.d.ts#machineName
+machineSpans: build/index.d.ts#machineSpans
+noteReport: build/index.d.ts#noteReport
+parseCheckSettings: build/ports.chunk.d.ts#parseCheckSettings
+parseDispatchSettings: build/index.d.ts#parseDispatchSettings
+parseMachineName: build/index.d.ts#parseMachineName
+parseMachineTimes: build/index.d.ts#parseMachineTimes
+parseRunLabel: build/ports.chunk.d.ts#parseRunLabel
+parseTrustRules: build/ports.chunk.d.ts#parseTrustRules
+plan: build/index.d.ts#plan
+readJobRun: build/ports.chunk.d.ts#readJobRun
+runLabel: build/ports.chunk.d.ts#runLabel
+runnerLabels: build/index.d.ts#runnerLabels
+sameName: build/ports.chunk.d.ts#sameName
+sameRun: build/ports.chunk.d.ts#sameRun
+sizeOfLabels: build/index.d.ts#sizeOfLabels
+spanOf: build/index.d.ts#spanOf
+startLife: build/index.d.ts#startLife
+waitOf: build/index.d.ts#waitOf
+
+## ./github (build/github.d.ts): names
+
+GitHubAnswer: build/github.d.ts#GitHubAnswer
+GitHubApi: build/github.d.ts#GitHubApi
+GitHubMethod: build/github.d.ts#GitHubMethod
+GitHubRequest: build/github.d.ts#GitHubRequest
+GitHubSourceOptions: build/github.d.ts#GitHubSourceOptions
+HELD_JOB_STATUSES: build/github.d.ts#HELD_JOB_STATUSES
+OPEN_RUN_STATUSES: build/github.d.ts#OPEN_RUN_STATUSES
+PAGE_SIZE: build/github.d.ts#PAGE_SIZE
+RUN_LIST_LIMIT: build/github.d.ts#RUN_LIST_LIMIT
+RunnerGroupCheck: build/github.d.ts#RunnerGroupCheck
+RunnerGroupFacts: build/github.d.ts#RunnerGroupFacts
+RunnerGroupRules: build/github.d.ts#RunnerGroupRules
+checkRunnerGroup: build/github.d.ts#checkRunnerGroup
+createGitHubSource: build/github.d.ts#createGitHubSource
+judgeRunnerGroup: build/github.d.ts#judgeRunnerGroup
+organizationScope: build/github.d.ts#organizationScope
+
+## ./proxmox (build/proxmox.d.ts): names
+
+DELIVERED_TAG: build/proxmox.chunk.d.ts#DELIVERED_TAG
+FILE_WRITE_LIMIT: build/proxmox.chunk.d.ts#FILE_WRITE_LIMIT
+MACHINE_DESCRIPTION_FORMAT: build/proxmox.chunk.d.ts#MACHINE_DESCRIPTION_FORMAT
+MACHINE_FILES: build/proxmox.chunk.d.ts#MACHINE_FILES
+MachineFiles: build/proxmox.chunk.d.ts#MachineFiles
+ProxmoxAnswer: build/proxmox.chunk.d.ts#ProxmoxAnswer
+ProxmoxApi: build/proxmox.chunk.d.ts#ProxmoxApi
+ProxmoxMethod: build/proxmox.chunk.d.ts#ProxmoxMethod
+ProxmoxProviderOptions: build/proxmox.chunk.d.ts#ProxmoxProviderOptions
+ProxmoxRequest: build/proxmox.chunk.d.ts#ProxmoxRequest
+ProxmoxSize: build/proxmox.chunk.d.ts#ProxmoxSize
+VMID_TRIES: build/proxmox.chunk.d.ts#VMID_TRIES
+createProxmoxProvider: build/proxmox.chunk.d.ts#createProxmoxProvider
+isVmid: build/proxmox.chunk.d.ts#isVmid
+machineDescription: build/proxmox.chunk.d.ts#machineDescription
+parseMachineDescription: build/proxmox.chunk.d.ts#parseMachineDescription
+
+## ./proxmox-client (build/proxmox-client.d.ts): names
+
+PROXMOX_API_PATH: build/proxmox-client.d.ts#PROXMOX_API_PATH
+PROXMOX_MESSAGE_LIMIT: build/proxmox-client.d.ts#PROXMOX_MESSAGE_LIMIT
+ProxmoxClientOptions: build/proxmox-client.d.ts#ProxmoxClientOptions
+ProxmoxExchange: build/proxmox-client.d.ts#ProxmoxExchange
+ProxmoxReply: build/proxmox-client.d.ts#ProxmoxReply
+ProxmoxTransport: build/proxmox-client.d.ts#ProxmoxTransport
+createProxmoxClient: build/proxmox-client.d.ts#createProxmoxClient
+isProxmoxToken: build/proxmox-client.d.ts#isProxmoxToken
+proxmoxUrlProblems: build/proxmox-client.d.ts#proxmoxUrlProblems
+
+## ./testing (build/testing.d.ts): names
+
+FakeGitHub: build/testing.d.ts#FakeGitHub
+FakeGitHubOptions: build/testing.d.ts#FakeGitHubOptions
+type FakeProxmox: build/testing.d.ts#FakeProxmox
+type FakeProxmoxOptions: build/testing.d.ts#FakeProxmoxOptions
+type FakeTaskKind: build/testing.d.ts#FakeTaskKind
+type FakeVm: build/testing.d.ts#FakeVm
+FakeWorld: build/testing.d.ts#FakeWorld
+FakeWorldOptions: build/testing.d.ts#FakeWorldOptions
+WorldClock: build/testing.d.ts#WorldClock
+WorldEvent: build/testing.d.ts#WorldEvent
+WorldFault: build/testing.d.ts#WorldFault
+WorldJob: build/testing.d.ts#WorldJob
+WorldJobInput: build/testing.d.ts#WorldJobInput
+WorldJobResult: build/testing.d.ts#WorldJobResult
+WorldRegistry: build/testing.d.ts#WorldRegistry
+WorldRequest: build/testing.d.ts#WorldRequest
+WorldRun: build/testing.d.ts#WorldRun
+WorldRunner: build/testing.d.ts#WorldRunner
+WorldTimes: build/testing.d.ts#WorldTimes
+countingSuffix: build/testing.d.ts#countingSuffix
+fakeGitHubApi: build/testing.d.ts#fakeGitHubApi
+fakeProxmox: build/testing.d.ts#fakeProxmox
+fakeWorld: build/testing.d.ts#fakeWorld
+
+## bin: 1 commands
+
+runner-dispatch-job-started: ./build/cli/job-started.js
+
+## Declarations
+
+### build/github.d.ts#GitHubAnswer
+export interface GitHubAnswer {
+  readonly status: number;
+  readonly body: unknown;
+}
+
+### build/github.d.ts#GitHubApi
+export interface GitHubApi<Signal extends StopSignal = StopSignal> {
+  request(request: GitHubRequest, signal: Signal): Promise<GitHubAnswer>;
+}
+
+### build/github.d.ts#GitHubMethod
+export type GitHubMethod = "GET" | "POST" | "DELETE";
+
+### build/github.d.ts#GitHubRequest
+export interface GitHubRequest {
+  readonly method: GitHubMethod;
+  readonly path: string;
+  readonly query: Readonly<Record<string, string>>;
+  readonly body: unknown;
+}
+
+### build/github.d.ts#GitHubSourceOptions
+export interface GitHubSourceOptions<Signal extends StopSignal = StopSignal> {
+  readonly api: GitHubApi<Signal>;
+  readonly runnerGroup?: number;
+  readonly organization?: string;
+}
+
+### build/github.d.ts#HELD_JOB_STATUSES
+export declare const HELD_JOB_STATUSES: readonly ["waiting", "requested", "pending"];
+
+### build/github.d.ts#OPEN_RUN_STATUSES
+export declare const OPEN_RUN_STATUSES: readonly ["queued", "in_progress", "requested", "waiting", "pending"];
+
+### build/github.d.ts#PAGE_SIZE
+export declare const PAGE_SIZE = 100;
+
+### build/github.d.ts#RUN_LIST_LIMIT
+export declare const RUN_LIST_LIMIT = 1e3;
+
+### build/github.d.ts#RunnerGroupCheck
+export interface RunnerGroupCheck {
+  readonly pass: boolean;
+  readonly problems: readonly string[];
+}
+
+### build/github.d.ts#RunnerGroupFacts
+export interface RunnerGroupFacts {
+  readonly group: unknown;
+  readonly repositories: readonly unknown[] | null;
+}
+
+### build/github.d.ts#RunnerGroupRules
+export interface RunnerGroupRules {
+  readonly served: readonly string[];
+  readonly publicRepositories?: boolean;
+}
+
+### build/github.d.ts#checkRunnerGroup
+export declare function checkRunnerGroup<Signal extends StopSignal = StopSignal>(api: GitHubApi<Signal>, organization: string, runnerGroup: number, rules: RunnerGroupRules, signal: Signal): Promise<RunnerGroupCheck>;
+
+### build/github.d.ts#createGitHubSource
+export declare function createGitHubSource<Signal extends StopSignal = StopSignal>(options: GitHubSourceOptions<Signal>): JobSource<Signal>;
+
+### build/github.d.ts#judgeRunnerGroup
+export declare function judgeRunnerGroup(facts: RunnerGroupFacts, rules: RunnerGroupRules): RunnerGroupCheck;
+
+### build/github.d.ts#organizationScope
+export declare function organizationScope(organization: string): string;
+
+### build/index.d.ts#DISPATCH_CAPACITY_MAX
+export declare const DISPATCH_CAPACITY_MAX = 1e3;
+
+### build/index.d.ts#DISPATCH_SETTINGS_FORMAT
+export declare const DISPATCH_SETTINGS_FORMAT = "dispatch-settings/1";
+
+### build/index.d.ts#DispatchConfig
+interface DispatchConfig {
+  readonly rules: TrustRules;
+  readonly times: MachineTimes;
+  readonly settings: DispatchSettings;
+}
+
+### build/index.d.ts#DispatchLife
+interface DispatchLife {
+  readonly machine: MachineRecord;
+  readonly life: MachineLife;
+}
+
+### build/index.d.ts#DispatchSettings
+interface DispatchSettings {
+  readonly prefix: string;
+  readonly capacity: number;
+  readonly sizes: readonly string[];
+  readonly standard: string;
+}
+
+### build/index.d.ts#DispatchSettingsResult
+type DispatchSettingsResult = {
+  readonly ok: true;
+  readonly settings: DispatchSettings;
+} | {
+  readonly ok: false;
+  readonly problems: readonly string[];
+};
+
+### build/index.d.ts#DispatchState
+interface DispatchState {
+  readonly lives: readonly DispatchLife[];
+  readonly failures: readonly RunFailures[];
+}
+
+### build/index.d.ts#Dispatcher
+interface Dispatcher<Signal extends StopSignal = StopSignal> {
+  pass(signal: Signal): Promise<PassReport>;
+  state(): DispatchState;
+}
+
+### build/index.d.ts#DispatcherOptions
+interface DispatcherOptions<Signal extends StopSignal = StopSignal> {
+  readonly rules: TrustRules;
+  readonly times: MachineTimes;
+  readonly settings: DispatchSettings;
+  readonly source: JobSource<Signal>;
+  readonly provider: MachineProvider<Signal>;
+  readonly now: () => number;
+  readonly suffix: () => string;
+  readonly stopped: (signal: Signal) => boolean | Promise<boolean>;
+}
+
+### build/index.d.ts#EMPTY_MEASURES
+export declare const EMPTY_MEASURES: MeasureState;
+
+### build/index.d.ts#EMPTY_STATE
+export declare const EMPTY_STATE: DispatchState;
+
+### build/index.d.ts#JOB_MEASURE_FORMAT
+export declare const JOB_MEASURE_FORMAT = "job-measure/1";
+
+### build/index.d.ts#JobMeasure
+interface JobMeasure {
+  readonly format: typeof JOB_MEASURE_FORMAT;
+  readonly repository: string;
+  readonly runId: number;
+  readonly runAttempt: number;
+  readonly jobId: number;
+  readonly queued: Moment;
+  readonly started: Moment | null;
+  readonly completed: Moment | null;
+  readonly runner: string | null;
+  readonly last: JobStatus;
+}
+
+### build/index.d.ts#JobSight
+interface JobSight {
+  readonly repository: string;
+  readonly runId: number;
+  readonly runAttempt: number;
+  readonly jobId: number;
+  readonly status: JobStatus;
+  readonly runner: string | null;
+}
+
+### build/index.d.ts#JobSpans
+interface JobSpans {
+  readonly queue: Span | null;
+  readonly run: Span | null;
+}
+
+### build/index.d.ts#JobStartedResult
+interface JobStartedResult {
+  readonly code: 0 | 1 | 2;
+  readonly lines: readonly string[];
+}
+
+### build/index.d.ts#LifeStep
+interface LifeStep {
+  readonly machine: string;
+  readonly run: RunKey;
+  readonly from: MachineState;
+  readonly on: MachineEvent;
+  readonly to: MachineState;
+  readonly transition: string;
+  readonly at: number;
+}
+
+### build/index.d.ts#LongestLife
+interface LongestLife {
+  readonly withJob: number;
+  readonly withoutJob: number;
+}
+
+### build/index.d.ts#MACHINE_ACTIONS
+export declare const MACHINE_ACTIONS: readonly MachineAction[];
+
+### build/index.d.ts#MACHINE_EVENTS
+export declare const MACHINE_EVENTS: readonly MachineEvent[];
+
+### build/index.d.ts#MACHINE_LIFECYCLE
+export declare const MACHINE_LIFECYCLE: Machine;
+
+### build/index.d.ts#MACHINE_MEASURE_FORMAT
+export declare const MACHINE_MEASURE_FORMAT = "machine-measure/1";
+
+### build/index.d.ts#MACHINE_STATES
+export declare const MACHINE_STATES: readonly MachineState[];
+
+### build/index.d.ts#MACHINE_TIMES_FORMAT
+export declare const MACHINE_TIMES_FORMAT = "machine-times/1";
+
+### build/index.d.ts#MACHINE_TIME_MAX
+export declare const MACHINE_TIME_MAX = 31536e3;
+
+### build/index.d.ts#MachineAction
+type MachineAction = "provider.destroy";
+
+### build/index.d.ts#MachineAsk
+interface MachineAsk {
+  readonly machine: string;
+  readonly at: number;
+}
+
+### build/index.d.ts#MachineEvent
+type MachineEvent = "provider.made" | "provider.failed" | "runner.registered" | "job.started" | "job.completed" | "job.none" | "stop" | "provider.destroyed" | "timer.make" | "timer.register" | "timer.idle" | "timer.job" | "timer.destroy";
+
+### build/index.d.ts#MachineLife
+interface MachineLife {
+  readonly state: MachineState;
+  readonly at: number;
+  readonly fired: number;
+}
+
+### build/index.d.ts#MachineMeasure
+interface MachineMeasure {
+  readonly format: typeof MACHINE_MEASURE_FORMAT;
+  readonly machine: string;
+  readonly size: string | null;
+  readonly run: RunKey;
+  readonly asked: number | null;
+  readonly made: Moment | null;
+  readonly registered: Moment | null;
+  readonly started: Moment | null;
+  readonly ended: Moment | null;
+  readonly end: MachineEvent | null;
+  readonly destroyed: Moment | null;
+}
+
+### build/index.d.ts#MachineSpans
+interface MachineSpans {
+  readonly start: Span | null;
+  readonly boot: Span | null;
+  readonly idle: Span | null;
+  readonly job: Span | null;
+  readonly teardown: Span | null;
+  readonly life: Span | null;
+}
+
+### build/index.d.ts#MachineState
+type MachineState = "asked" | "made" | "registered" | "busy" | "done" | "destroyed";
+
+### build/index.d.ts#MachineStep
+interface MachineStep {
+  readonly life: MachineLife;
+  readonly transition: string;
+  readonly actions: readonly MachineAction[];
+}
+
+### build/index.d.ts#MachineTimes
+interface MachineTimes {
+  readonly make: number;
+  readonly register: number;
+  readonly idle: number;
+  readonly job: number;
+  readonly retry: number;
+  readonly retryMax: number;
+  readonly pass: number;
+}
+
+### build/index.d.ts#MachineTimesResult
+type MachineTimesResult = {
+  readonly ok: true;
+  readonly times: MachineTimes;
+} | {
+  readonly ok: false;
+  readonly problems: readonly string[];
+};
+
+### build/index.d.ts#MachineWait
+interface MachineWait {
+  readonly timer: string;
+  readonly fires: MachineEvent;
+  readonly low: number;
+  readonly high: number;
+}
+
+### build/index.d.ts#MeasureNote
+interface MeasureNote {
+  readonly state: MeasureState;
+  readonly machines: readonly MachineMeasure[];
+  readonly jobs: readonly JobMeasure[];
+}
+
+### build/index.d.ts#MeasureState
+interface MeasureState {
+  readonly listed: number | null;
+  readonly views: readonly ViewRead[];
+  readonly both: readonly ViewRead[];
+  readonly machines: readonly MachineMeasure[];
+  readonly jobs: readonly JobMeasure[];
+  readonly closed: readonly string[];
+}
+
+### build/index.d.ts#Moment
+interface Moment {
+  readonly after: number | null;
+  readonly at: number;
+}
+
+### build/index.d.ts#Observation
+interface Observation {
+  readonly now: number;
+  readonly stopped: boolean | null;
+  readonly views: readonly RepositoryObservation[];
+  readonly machines: readonly ProviderMachine[] | null;
+}
+
+### build/index.d.ts#PassFailure
+interface PassFailure {
+  readonly request: PassRequest;
+  readonly target: string;
+  readonly text: string;
+}
+
+### build/index.d.ts#PassReport
+interface PassReport {
+  readonly at: number;
+  readonly read: number;
+  readonly listed: boolean;
+  readonly viewed: readonly string[];
+  readonly jobs: readonly JobSight[];
+  readonly asked: readonly MachineAsk[];
+  readonly stopped: boolean | null;
+  readonly steps: readonly LifeStep[];
+  readonly adopted: readonly string[];
+  readonly destroys: readonly string[];
+  readonly removals: readonly PlannedRemoval[];
+  readonly made: readonly MachineRecord[];
+  readonly waits: readonly PlannedWait[];
+  readonly failures: readonly PassFailure[];
+  readonly lives: readonly DispatchLife[];
+  readonly cut: boolean;
+}
+
+### build/index.d.ts#PassRequest
+type PassRequest = "stop-switch" | "machines" | "view" | "destroy" | "remove" | "register" | "make";
+
+### build/index.d.ts#Plan
+interface Plan {
+  readonly state: DispatchState;
+  readonly steps: readonly LifeStep[];
+  readonly adopted: readonly string[];
+  readonly destroys: readonly string[];
+  readonly removals: readonly PlannedRemoval[];
+  readonly makes: readonly PlannedMake[];
+  readonly waits: readonly PlannedWait[];
+}
+
+### build/index.d.ts#PlannedMake
+interface PlannedMake {
+  readonly run: RunKey;
+  readonly size: string;
+}
+
+### build/index.d.ts#PlannedRemoval
+interface PlannedRemoval {
+  readonly repository: string;
+  readonly runnerId: number;
+  readonly name: string;
+}
+
+### build/index.d.ts#PlannedWait
+interface PlannedWait {
+  readonly run: RunKey;
+  readonly jobs: number;
+  readonly reason: WaitReason;
+  readonly text: string;
+}
+
+### build/index.d.ts#RepositoryObservation
+interface RepositoryObservation {
+  readonly repository: string;
+  readonly view: RepositoryView | null;
+}
+
+### build/index.d.ts#RunFailures
+interface RunFailures {
+  readonly run: RunKey;
+  readonly count: number;
+  readonly at: number;
+}
+
+### build/index.d.ts#Span
+interface Span {
+  readonly low: number;
+  readonly high: number | null;
+}
+
+### build/index.d.ts#ViewRead
+interface ViewRead {
+  readonly repository: string;
+  readonly at: number;
+}
+
+### build/index.d.ts#WaitReason
+type WaitReason = "trust" | "label" | "stop" | "provider" | "backoff" | "capacity";
+
+### build/index.d.ts#advance
+export declare function advance(life: MachineLife, event: MachineEvent, at: number): MachineStep | null;
+
+### build/index.d.ts#createDispatcher
+export declare function createDispatcher<Signal extends StopSignal = StopSignal>(options: DispatcherOptions<Signal>): Dispatcher<Signal>;
+
+### build/index.d.ts#due
+export declare function due(life: MachineLife, now: number, times: MachineTimes): MachineEvent | null;
+
+### build/index.d.ts#jobSpans
+export declare function jobSpans(record: JobMeasure): JobSpans;
+
+### build/index.d.ts#jobStarted
+export declare function jobStarted(args: readonly string[], environment: JobEnvironment, read: (path: string) => string): JobStartedResult;
+
+### build/index.d.ts#longestLife
+export declare function longestLife(times: MachineTimes): LongestLife;
+
+### build/index.d.ts#machineName
+export declare function machineName(prefix: string, run: RunLabelParts, suffix: string): string;
+
+### build/index.d.ts#machineSpans
+export declare function machineSpans(record: MachineMeasure): MachineSpans;
+
+### build/index.d.ts#noteReport
+export declare function noteReport(state: MeasureState, report: PassReport): MeasureNote;
+
+### build/index.d.ts#parseDispatchSettings
+export declare function parseDispatchSettings(value: unknown): DispatchSettingsResult;
+
+### build/index.d.ts#parseMachineName
+export declare function parseMachineName(prefix: string, name: string): RunLabelParts | null;
+
+### build/index.d.ts#parseMachineTimes
+export declare function parseMachineTimes(value: unknown): MachineTimesResult;
+
+### build/index.d.ts#plan
+export declare function plan(state: DispatchState, seen: Observation, config: DispatchConfig): Plan;
+
+### build/index.d.ts#runnerLabels
+export declare function runnerLabels(label: string, size: string): readonly string[];
+
+### build/index.d.ts#sizeOfLabels
+export declare function sizeOfLabels(settings: DispatchSettings, label: string, labels: readonly string[]): string | null;
+
+### build/index.d.ts#spanOf
+export declare function spanOf(from: Moment | number | null, to: Moment | null): Span | null;
+
+### build/index.d.ts#startLife
+export declare function startLife(at: number): MachineLife;
+
+### build/index.d.ts#waitOf
+export declare function waitOf(state: MachineState, times: MachineTimes, fired?: number): MachineWait | null;
+
+### build/ports.chunk.d.ts#CHECK_SETTINGS_FORMAT
+declare const CHECK_SETTINGS_FORMAT = "machine-check/1";
+
+### build/ports.chunk.d.ts#CheckRefusal
+interface CheckRefusal {
+  readonly rule: CheckRule;
+  readonly text: string;
+}
+
+### build/ports.chunk.d.ts#CheckRule
+type CheckRule = RefusalRule | "event-file" | "machine";
+
+### build/ports.chunk.d.ts#CheckSettings
+interface CheckSettings {
+  readonly rules: TrustRules;
+  readonly run: RunKey;
+}
+
+### build/ports.chunk.d.ts#CheckSettingsDocument
+interface CheckSettingsDocument {
+  readonly format: typeof CHECK_SETTINGS_FORMAT;
+  readonly rules: TrustRules & {
+    readonly format: typeof TRUST_RULES_FORMAT;
+  };
+  readonly run: RunKey;
+}
+
+### build/ports.chunk.d.ts#CheckSettingsResult
+type CheckSettingsResult = {
+  readonly ok: true;
+  readonly settings: CheckSettings;
+} | {
+  readonly ok: false;
+  readonly problems: readonly string[];
+};
+
+### build/ports.chunk.d.ts#Decision
+interface Decision {
+  readonly trusted: boolean;
+  readonly refusals: readonly Refusal[];
+}
+
+### build/ports.chunk.d.ts#JobCheck
+interface JobCheck {
+  readonly pass: boolean;
+  readonly run: RunRecord;
+  readonly refusals: readonly CheckRefusal[];
+}
+
+### build/ports.chunk.d.ts#JobEnvironment
+type JobEnvironment = Readonly<Record<string, string | undefined>>;
+
+### build/ports.chunk.d.ts#JobRecord
+interface JobRecord {
+  readonly repository: string;
+  readonly jobId: number;
+  readonly runId: number;
+  readonly runAttempt: number;
+  readonly labels: readonly string[];
+}
+
+### build/ports.chunk.d.ts#JobSource
+interface JobSource<Signal extends StopSignal = StopSignal> {
+  view(repository: string, runs: readonly RunKey[], signal: Signal): Promise<RepositoryView>;
+  register(request: RunnerRequest, signal: Signal): Promise<RunnerRegistration>;
+  remove(repository: string, runnerId: number, signal: Signal): Promise<void>;
+}
+
+### build/ports.chunk.d.ts#JobStatus
+type JobStatus = "queued" | "in_progress" | "completed";
+
+### build/ports.chunk.d.ts#MachineProvider
+interface MachineProvider<Signal extends StopSignal = StopSignal> {
+  make(request: MachineRequest, signal: Signal): Promise<void>;
+  machines(signal: Signal): Promise<readonly ProviderMachine[]>;
+  destroy(name: string, signal: Signal): Promise<void>;
+}
+
+### build/ports.chunk.d.ts#MachineRecord
+interface MachineRecord {
+  readonly name: string;
+  readonly size: string;
+  readonly repository: string;
+  readonly runId: number;
+  readonly runAttempt: number;
+}
+
+### build/ports.chunk.d.ts#MachineRequest
+interface MachineRequest {
+  readonly machine: MachineRecord;
+  readonly configuration: string;
+  readonly check: CheckSettings;
+}
+
+### build/ports.chunk.d.ts#MachineStatus
+type MachineStatus = "making" | "operating" | "stopped";
+
+### build/ports.chunk.d.ts#OUTSIDE_INPUT_EVENTS
+declare const OUTSIDE_INPUT_EVENTS: readonly string[];
+
+### build/ports.chunk.d.ts#ProviderMachine
+interface ProviderMachine {
+  readonly machine: MachineRecord;
+  readonly status: MachineStatus;
+}
+
+### build/ports.chunk.d.ts#Refusal
+interface Refusal {
+  readonly rule: RefusalRule;
+  readonly text: string;
+}
+
+### build/ports.chunk.d.ts#RefusalRule
+type RefusalRule = "record" | "repository" | "event" | "outside-input-event" | "head-repository" | "actor" | "triggering-actor";
+
+### build/ports.chunk.d.ts#RepositoryView
+interface RepositoryView {
+  readonly runs: readonly SourceRun[];
+  readonly runners: readonly SourceRunner[];
+  readonly scope?: string;
+}
+
+### build/ports.chunk.d.ts#RunKey
+interface RunKey {
+  readonly repository: string;
+  readonly runId: number;
+  readonly runAttempt: number;
+}
+
+### build/ports.chunk.d.ts#RunLabelParts
+interface RunLabelParts {
+  readonly runId: number;
+  readonly runAttempt: number;
+}
+
+### build/ports.chunk.d.ts#RunRecord
+interface RunRecord {
+  readonly repository: string;
+  readonly runId: number;
+  readonly runAttempt: number;
+  readonly event: string;
+  readonly headRepository: string | null;
+  readonly actor: string;
+  readonly triggeringActor: string;
+}
+
+### build/ports.chunk.d.ts#RunnerRegistration
+interface RunnerRegistration {
+  readonly runnerId: number;
+  readonly configuration: string;
+}
+
+### build/ports.chunk.d.ts#RunnerRequest
+interface RunnerRequest {
+  readonly repository: string;
+  readonly name: string;
+  readonly labels: readonly string[];
+}
+
+### build/ports.chunk.d.ts#SourceJob
+interface SourceJob extends JobRecord {
+  readonly status: JobStatus;
+  readonly runner: string | null;
+}
+
+### build/ports.chunk.d.ts#SourceRun
+interface SourceRun {
+  readonly run: RunRecord;
+  readonly jobs: readonly SourceJob[];
+}
+
+### build/ports.chunk.d.ts#SourceRunner
+interface SourceRunner {
+  readonly runnerId: number;
+  readonly name: string;
+  readonly online: boolean;
+  readonly busy: boolean;
+}
+
+### build/ports.chunk.d.ts#StopSignal
+interface StopSignal {
+  readonly aborted: boolean;
+}
+
+### build/ports.chunk.d.ts#TRUST_RULES_FORMAT
+declare const TRUST_RULES_FORMAT = "trust-rules/1";
+
+### build/ports.chunk.d.ts#TrustRules
+interface TrustRules {
+  readonly repositories: readonly string[];
+  readonly events: readonly string[];
+  readonly actors: readonly string[];
+}
+
+### build/ports.chunk.d.ts#TrustRulesResult
+type TrustRulesResult = {
+  readonly ok: true;
+  readonly rules: TrustRules;
+} | {
+  readonly ok: false;
+  readonly problems: readonly string[];
+};
+
+### build/ports.chunk.d.ts#checkJob
+declare function checkJob(settings: CheckSettings, environment: JobEnvironment, event: unknown): JobCheck;
+
+### build/ports.chunk.d.ts#checkSettingsDocument
+declare function checkSettingsDocument(settings: CheckSettings): CheckSettingsDocument;
+
+### build/ports.chunk.d.ts#decide
+declare function decide(rules: TrustRules, run: RunRecord): Decision;
+
+### build/ports.chunk.d.ts#foldName
+declare function foldName(name: string): string;
+
+### build/ports.chunk.d.ts#isId
+declare function isId(value: unknown): value is number;
+
+### build/ports.chunk.d.ts#parseCheckSettings
+declare function parseCheckSettings(value: unknown): CheckSettingsResult;
+
+### build/ports.chunk.d.ts#parseRunLabel
+declare function parseRunLabel(label: string): RunLabelParts | null;
+
+### build/ports.chunk.d.ts#parseTrustRules
+declare function parseTrustRules(value: unknown): TrustRulesResult;
+
+### build/ports.chunk.d.ts#readJobRun
+declare function readJobRun(environment: JobEnvironment, event: unknown): RunRecord;
+
+### build/ports.chunk.d.ts#runLabel
+declare function runLabel(run: RunLabelParts): string;
+
+### build/ports.chunk.d.ts#sameName
+declare function sameName(a: unknown, b: unknown): boolean;
+
+### build/ports.chunk.d.ts#sameRun
+declare function sameRun(a: RunKey, b: RunKey): boolean;
+
+### build/proxmox-client.d.ts#PROXMOX_API_PATH
+export declare const PROXMOX_API_PATH = "/api2/json";
+
+### build/proxmox-client.d.ts#PROXMOX_MESSAGE_LIMIT
+export declare const PROXMOX_MESSAGE_LIMIT = 500;
+
+### build/proxmox-client.d.ts#ProxmoxClientOptions
+export interface ProxmoxClientOptions<Signal extends StopSignal = StopSignal> {
+  readonly url: string;
+  readonly token: string;
+  readonly transport: ProxmoxTransport<Signal>;
+}
+
+### build/proxmox-client.d.ts#ProxmoxExchange
+export interface ProxmoxExchange {
+  readonly method: ProxmoxMethod;
+  readonly url: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: string | undefined;
+}
+
+### build/proxmox-client.d.ts#ProxmoxReply
+export interface ProxmoxReply {
+  readonly status: number;
+  readonly statusText: string;
+  readonly body: string;
+}
+
+### build/proxmox-client.d.ts#ProxmoxTransport
+export type ProxmoxTransport<Signal extends StopSignal = StopSignal> = (exchange: ProxmoxExchange, signal: Signal) => Promise<ProxmoxReply>;
+
+### build/proxmox-client.d.ts#createProxmoxClient
+export declare function createProxmoxClient<Signal extends StopSignal = StopSignal>(options: ProxmoxClientOptions<Signal>): ProxmoxApi<Signal>;
+
+### build/proxmox-client.d.ts#isProxmoxToken
+export declare function isProxmoxToken(value: unknown): value is string;
+
+### build/proxmox-client.d.ts#proxmoxUrlProblems
+export declare function proxmoxUrlProblems(value: unknown): string[];
+
+### build/proxmox.chunk.d.ts#DELIVERED_TAG
+declare const DELIVERED_TAG = "delivered";
+
+### build/proxmox.chunk.d.ts#FILE_WRITE_LIMIT
+declare const FILE_WRITE_LIMIT = 61440;
+
+### build/proxmox.chunk.d.ts#MACHINE_DESCRIPTION_FORMAT
+declare const MACHINE_DESCRIPTION_FORMAT = "runner-machine/1";
+
+### build/proxmox.chunk.d.ts#MACHINE_FILES
+declare const MACHINE_FILES: MachineFiles;
+
+### build/proxmox.chunk.d.ts#MachineFiles
+interface MachineFiles {
+  readonly check: string;
+  readonly configuration: string;
+}
+
+### build/proxmox.chunk.d.ts#ProxmoxAnswer
+interface ProxmoxAnswer {
+  readonly status: number;
+  readonly message: string;
+  readonly data: unknown;
+}
+
+### build/proxmox.chunk.d.ts#ProxmoxApi
+interface ProxmoxApi<Signal extends StopSignal = StopSignal> {
+  request(request: ProxmoxRequest, signal: Signal): Promise<ProxmoxAnswer>;
+}
+
+### build/proxmox.chunk.d.ts#ProxmoxMethod
+type ProxmoxMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+### build/proxmox.chunk.d.ts#ProxmoxProviderOptions
+interface ProxmoxProviderOptions<Signal extends StopSignal = StopSignal> {
+  readonly api: ProxmoxApi<Signal>;
+  readonly pool: string;
+  readonly sizes: Readonly<Record<string, ProxmoxSize>>;
+  readonly files?: MachineFiles;
+  readonly problem?: (text: string) => void;
+}
+
+### build/proxmox.chunk.d.ts#ProxmoxRequest
+interface ProxmoxRequest {
+  readonly method: ProxmoxMethod;
+  readonly path: string;
+  readonly parameters: Readonly<Record<string, string | number>>;
+}
+
+### build/proxmox.chunk.d.ts#ProxmoxSize
+interface ProxmoxSize {
+  readonly node: string;
+  readonly template: number;
+  readonly cores?: number;
+  readonly memory?: number;
+}
+
+### build/proxmox.chunk.d.ts#VMID_TRIES
+declare const VMID_TRIES = 8;
+
+### build/proxmox.chunk.d.ts#createProxmoxProvider
+declare function createProxmoxProvider<Signal extends StopSignal = StopSignal>(options: ProxmoxProviderOptions<Signal>): MachineProvider<Signal>;
+
+### build/proxmox.chunk.d.ts#isVmid
+declare function isVmid(value: unknown): value is number;
+
+### build/proxmox.chunk.d.ts#machineDescription
+declare function machineDescription(machine: MachineRecord): string;
+
+### build/proxmox.chunk.d.ts#parseMachineDescription
+declare function parseMachineDescription(description: unknown): MachineRecord | null;
+
+### build/testing.d.ts#FakeGitHub
+export interface FakeGitHub {
+  readonly api: GitHubApi;
+  requests(): readonly GitHubRequest[];
+}
+
+### build/testing.d.ts#FakeGitHubOptions
+export interface FakeGitHubOptions {
+  readonly pageSize?: number;
+  readonly answer?: (request: GitHubRequest) => GitHubAnswer | null;
+}
+
+### build/testing.d.ts#FakeProxmox
+interface FakeProxmox {
+  readonly api: ProxmoxApi;
+  readonly requests: readonly ProxmoxRequest[];
+  vm(vmid: number): FakeVm | undefined;
+  vms(): readonly FakeVm[];
+  tick(count?: number): void;
+  answerNext(match: (request: ProxmoxRequest) => boolean, answer: ProxmoxAnswer): void;
+  failNext(kind: FakeTaskKind, text: string): void;
+  occupy(vmid: number, node: string, inPool?: boolean): void;
+  powerOff(vmid: number): void;
+  remove(vmid: number): void;
+}
+
+### build/testing.d.ts#FakeProxmoxOptions
+interface FakeProxmoxOptions {
+  readonly pool: string;
+  readonly templates: readonly {
+    readonly vmid: number;
+    readonly node: string;
+    readonly agent?: boolean;
+    readonly tags?: readonly string[];
+  }[];
+  readonly ticks?: Partial<Readonly<Record<FakeTaskKind | "boot", number>>>;
+}
+
+### build/testing.d.ts#FakeTaskKind
+type FakeTaskKind = "clone" | "start" | "stop" | "delete";
+
+### build/testing.d.ts#FakeVm
+interface FakeVm {
+  readonly vmid: number;
+  readonly node: string;
+  name: string;
+  description: string;
+  pool: string | null;
+  tags: string[];
+  status: "running" | "stopped";
+  lock: string;
+  readonly template: boolean;
+  readonly agent: boolean;
+  cores: number;
+  memory: number;
+  boot: number;
+  readonly files: Map<string, string>;
+}
+
+### build/testing.d.ts#FakeWorld
+export interface FakeWorld {
+  readonly source: JobSource;
+  readonly provider: MachineProvider;
+  addRun(run: RunRecord, jobs: readonly WorldJobInput[]): readonly number[];
+  cancelRun(run: RunKey): void;
+  lose(name: string): void;
+  halt(name: string): void;
+  machines(): readonly ProviderMachine[];
+  runners(): readonly WorldRunner[];
+  scopeOf(repository: string): string;
+  organizations(): readonly string[];
+  readonly registry: WorldRegistry;
+  runs(): readonly WorldRun[];
+  jobs(): readonly WorldJob[];
+  peak(): number;
+  secrets(): readonly string[];
+  events(): readonly WorldEvent[];
+}
+
+### build/testing.d.ts#FakeWorldOptions
+export interface FakeWorldOptions {
+  readonly clock: WorldClock;
+  readonly times: WorldTimes;
+  readonly faults?: (request: WorldRequest, target: string) => WorldFault | null;
+  readonly organizations?: readonly string[];
+}
+
+### build/testing.d.ts#WorldClock
+export interface WorldClock {
+  now(): number;
+  after(ms: number, run: () => void): unknown;
+}
+
+### build/testing.d.ts#WorldEvent
+export interface WorldEvent {
+  readonly at: number;
+  readonly kind: "registered" | "removed" | "asked" | "operating" | "online" | "job-started" | "job-refused" | "job-ended" | "job-lost" | "destroy-asked" | "halted" | "gone";
+  readonly name: string;
+  readonly jobId: number | null;
+}
+
+### build/testing.d.ts#WorldFault
+export type WorldFault = "refuse" | "lose";
+
+### build/testing.d.ts#WorldJob
+export interface WorldJob extends SourceJob {
+  readonly ran: boolean;
+  readonly result: WorldJobResult | null;
+  readonly refusals: readonly CheckRefusal[];
+}
+
+### build/testing.d.ts#WorldJobInput
+export interface WorldJobInput {
+  readonly labels: readonly string[];
+  readonly duration: number;
+}
+
+### build/testing.d.ts#WorldJobResult
+export type WorldJobResult = "success" | "refused" | "lost" | "cancelled";
+
+### build/testing.d.ts#WorldRegistry
+export interface WorldRegistry {
+  register(scope: string, name: string, labels: readonly string[], signal: StopSignal): Promise<RunnerRegistration>;
+  remove(scope: string, runnerId: number, signal: StopSignal): Promise<void>;
+}
+
+### build/testing.d.ts#WorldRequest
+export type WorldRequest = "view" | "register" | "remove" | "machines" | "make" | "destroy";
+
+### build/testing.d.ts#WorldRun
+export interface WorldRun {
+  readonly run: RunRecord;
+  readonly jobs: readonly WorldJob[];
+}
+
+### build/testing.d.ts#WorldRunner
+export interface WorldRunner extends SourceRunner {
+  readonly scope: string;
+  readonly labels: readonly string[];
+}
+
+### build/testing.d.ts#WorldTimes
+export interface WorldTimes {
+  readonly boot: number;
+  readonly connect: number;
+  readonly destroy: number;
+}
+
+### build/testing.d.ts#countingSuffix
+export declare function countingSuffix(first?: number): () => string;
+
+### build/testing.d.ts#fakeGitHubApi
+export declare function fakeGitHubApi(world: FakeWorld, options?: FakeGitHubOptions): FakeGitHub;
+
+### build/testing.d.ts#fakeProxmox
+export declare function fakeProxmox(options: FakeProxmoxOptions): FakeProxmox;
+
+### build/testing.d.ts#fakeWorld
+export declare function fakeWorld(options: FakeWorldOptions): FakeWorld;
