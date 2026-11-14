@@ -3,7 +3,26 @@
   "name": "@mark1russell7/runner-dispatch",
   "version": "0.1.0",
   "description": "One-job CI runners for trusted jobs: the records of a run, a job and a machine, the trust rules as data, the check on the machine, the life of a machine as a state machine, the dispatcher, the GitHub source and the Proxmox provider.",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mark1russell7/runner-dispatch.git",
+    "directory": "packages/runner-dispatch"
+  },
+  "homepage": "https://github.com/mark1russell7/runner-dispatch/tree/main/packages/runner-dispatch#readme",
+  "bugs": {
+    "url": "https://github.com/mark1russell7/runner-dispatch/issues"
+  },
+  "keywords": [
+    "github-actions",
+    "self-hosted-runner",
+    "ci",
+    "runner",
+    "proxmox",
+    "one-job",
+    "trust",
+    "dispatcher"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
@@ -14,7 +33,14 @@
     "./testing": "./src/testing.ts",
     "./package.json": "./package.json"
   },
+  "bin": {
+    "runner-dispatch-job-started": "./src/cli/job-started.ts"
+  },
+  "files": [
+    "build"
+  ],
   "scripts": {
+    "build": "tsdown",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
@@ -28,8 +54,48 @@
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^5.0.3",
     "fast-check": "^4.10.2",
+    "tsdown": "^0.23.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3",
     "zod": "^4.6.7"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./build/index.js",
+    "types": "./build/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./build/index.d.ts",
+        "import": "./build/index.js",
+        "default": "./build/index.js"
+      },
+      "./github": {
+        "types": "./build/github.d.ts",
+        "import": "./build/github.js",
+        "default": "./build/github.js"
+      },
+      "./proxmox": {
+        "types": "./build/proxmox.d.ts",
+        "import": "./build/proxmox.js",
+        "default": "./build/proxmox.js"
+      },
+      "./proxmox-client": {
+        "types": "./build/proxmox-client.d.ts",
+        "import": "./build/proxmox-client.js",
+        "default": "./build/proxmox-client.js"
+      },
+      "./testing": {
+        "types": "./build/testing.d.ts",
+        "import": "./build/testing.js",
+        "default": "./build/testing.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "bin": {
+      "runner-dispatch-job-started": "./build/cli/job-started.js"
+    }
   }
 }
