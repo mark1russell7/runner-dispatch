@@ -1,9 +1,18 @@
 import {
+  EMPTY_MEASURES,
+  jobSpans,
+  machineSpans,
+  noteReport,
   parseDispatchSettings,
   parseMachineTimes,
   parseTrustRules,
   type DispatchSettings,
+  type JobMeasure,
+  type JobSpans,
+  type MachineMeasure,
+  type MachineSpans,
   type MachineTimes,
+  type MeasureState,
   type PassReport,
   type TrustRules,
 } from "@mark1russell7/runner-dispatch";
@@ -245,7 +254,9 @@ export function readSecrets(env: Readonly<Record<string, string | undefined>>): 
 
 /** This record is one line of the log of a program. No line has a secret or a one-job configuration. */
 export type LogLine =
-  | { readonly event: "pass"; readonly report: Omit<PassReport, "lives">; readonly machines: number }
+  | { readonly event: "pass"; readonly report: Omit<PassReport, "lives" | "jobs">; readonly machines: number; readonly jobs: number }
+  | { readonly event: "machine-measure"; readonly record: MachineMeasure; readonly spans: MachineSpans }
+  | { readonly event: "job-measure"; readonly record: JobMeasure; readonly spans: JobSpans }
   | { readonly event: "pass-failed"; readonly failures: number; readonly text: string }
   | { readonly event: "problem"; readonly text: string }
   | { readonly event: "runner-group"; readonly check: RunnerGroupCheck }
@@ -322,6 +333,7 @@ export async function prepareProgram(program: Program, secrets: Secrets, ports: 
 
   let builder: ServiceBuilder;
   let waits = -1;
+  let measures: MeasureState = EMPTY_MEASURES;
   try {
     const client = createProxmoxClient({ url: program.proxmox.url, token: secrets.proxmox, transport: ports.proxmox(program.proxmox.url) });
     const provider = createProxmoxProvider({
@@ -346,10 +358,15 @@ export async function prepareProgram(program: Program, secrets: Secrets, ports: 
       loop: program.loop,
       profile: PROFILES[program.profile],
       onReport: (report) => {
+        // Each pass goes into the measures. A record goes to the log when its machine or its job is complete.
+        const note = noteReport(measures, report);
+        measures = note.state;
+        for (const record of note.machines) ports.log({ event: "machine-measure", record, spans: machineSpans(record) });
+        for (const record of note.jobs) ports.log({ event: "job-measure", record, spans: jobSpans(record) });
         if (!busy(report) && report.waits.length === waits) return;
         waits = report.waits.length;
-        const { lives, ...rest } = report;
-        ports.log({ event: "pass", report: rest, machines: lives.length });
+        const { lives, jobs, ...rest } = report;
+        ports.log({ event: "pass", report: rest, machines: lives.length, jobs: jobs.length });
       },
       onError: (error, failures) => ports.log({ event: "pass-failed", failures, text: textOf(error) }),
       clock: ports.clock,

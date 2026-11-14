@@ -461,6 +461,34 @@ The tests found these limits. They are properties of the run label, not defects 
 - A run from a fork can write the run label of a trusted run. Its job can take the runner of that run.
 - The check on the machine then refuses the job, and no step starts. The trusted job waits for the next machine.
 
+### The measures
+
+`noteReport` adds the report of one pass to the measures. It is a function with no effect. It gives the record of each machine at the end of its life, and of each job at its end.
+
+```ts
+import { EMPTY_MEASURES, jobSpans, machineSpans, noteReport } from "@mark1russell7/runner-dispatch";
+
+let measures = EMPTY_MEASURES;
+const note = noteReport(measures, report);
+measures = note.state;
+for (const record of note.machines) log(record, machineSpans(record));
+for (const record of note.jobs) log(record, jobSpans(record));
+```
+
+- A record `machine-measure/1` has the times of the events of a machine. The events are the request, the operation, the connection of the runner, the job, the end of the work and the end of the machine.
+- A record `job-measure/1` has the times that the views showed the job in the queue, started and complete.
+- A dispatcher sees an event only in a read. Thus each time is a `Moment`: the event came from `after` to `at`.
+- `after` is the start of the last read that did not show the event. `at` is the end of the reads of the pass that showed it.
+- The time of an act of the dispatcher is exact. Examples are the request for a machine and a timer.
+- `machineSpans` gives the bounds of the spans of a machine: the start, the boot, the idle time, the job, the teardown and the life.
+- `jobSpans` gives the bounds of the queue time and the run time of a job.
+- The report of a pass gives the facts: `read`, `listed`, `viewed`, `jobs` and `asked`.
+
+A property test on the fake world holds the bounds. It has random times, slow reads, failed reads and new starts of the dispatcher. Each true time is in its bounds.
+
+- The bounds are correct when each view shows each run that is not complete, as the port `JobSource` states.
+- The memory of the measures is only in the process. After a new start, the record of an adopted machine has no time of its request.
+
 ### The fake world
 
 The entry `@mark1russell7/runner-dispatch/testing` has a source and a provider for tests, on one clock.
