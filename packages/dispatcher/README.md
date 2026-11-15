@@ -174,11 +174,24 @@ node src/probe-bin.ts --repository octo/app
 node src/probe-bin.ts --repository octo/app --organization octo --group
 ```
 
+Do not write the token on the command line: the history of the shell keeps each command. Copy the token, and send it to stdin with `--token-stdin`. The option `--out` writes the record as UTF-8, with no redirect of the shell:
+
+```powershell
+# PowerShell
+Get-Clipboard | node src/probe-bin.ts --token-stdin --repository octo/app --out probe.json
+```
+
+```sh
+# Git Bash: node.exe, because the alias node of Git Bash starts winpty, and winpty refuses a redirect of stdin or stdout
+node.exe src/probe-bin.ts --token-stdin --repository octo/app --out probe.json < /dev/clipboard
+```
+
 - The probe makes one runner with the label `runner-dispatch-probe`, and removes it at once. No job names this label.
 - The record keeps only the id of the runner. Thus the record has no one-job configuration and no token.
 - With `--group`, the probe makes a runner group in the organization for the runner. It removes the runner first, then the group.
 - A stop with Ctrl+C stops the steps, but the probe still removes its runner and its group.
-- The record `github-probe/1` goes to stdout as JSON. The exit code 1 tells that a runner or a group stays on GitHub.
+- The record `github-probe/1` goes to stdout as JSON, or to the file of `--out`. The exit code 1 tells that a runner or a group stays on GitHub.
+- With `--token-stdin`, a terminal on stdin is a mistake, and the probe stops before a request. A text with a space or two lines is not a token.
 
 The primary limit of a token is the limit of its user. Thus each other client of the user adds noise to the measure of an answer 304:
 
