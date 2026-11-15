@@ -142,6 +142,38 @@ The command makes the ports of Node.js in `src/cli.ts`:
 - `fileExists` examines the stop file. An error that is not `ENOENT` makes the pass fail, and the stop switch does not change.
 - Each line of each output goes through `redactSecrets` of `@mark1russell7/text/redact` with the two tokens. Thus an error text from a library also has no token.
 
+## The probe of a credential
+
+The entry `src/probe-bin.ts` sends the requests of the dispatcher to GitHub with one real token. It measures four facts:
+
+| Fact | The measure |
+| --- | --- |
+| The permissions of each request | The header `x-accepted-github-permissions` and the status of each request |
+| The cost of an answer 304 | The count of the used requests before and after each conditional request |
+| The labels of a one-job runner | The labels that GitHub gives to a new runner |
+| The runner groups of the organization | Each group, and a probe group with the visibility `selected` |
+
+```sh
+export RUNNER_DISPATCH_GITHUB_TOKEN=...
+node src/probe-bin.ts --repository octo/app
+node src/probe-bin.ts --repository octo/app --organization octo --group
+```
+
+- The probe makes one runner with the label `runner-dispatch-probe`, and removes it at once. No job names this label.
+- The record keeps only the id of the runner. Thus the record has no one-job configuration and no token.
+- With `--group`, the probe makes a runner group in the organization for the runner. It removes the runner first, then the group.
+- A stop with Ctrl+C stops the steps, but the probe still removes its runner and its group.
+- The record `github-probe/1` goes to stdout as JSON. The exit code 1 tells that a runner or a group stays on GitHub.
+
+The measure of an answer 304 needs a token that no other client uses during the probe:
+
+- The probe reads the rate two times, sends the list of runs, and sends the same list again with its `ETag`. Then it reads the rate again.
+- A read of the rate costs nothing. Thus with no other client, the two reads are equal, and the first list adds 1.
+- Each conditional request must add the same count, and the last read must be equal to the last conditional request.
+- Else the measure has no read. Requests of another client in one gap of the sequence give no read, and not a wrong cost.
+
+The docs of GitHub do not fix the format of the header of the permissions. Thus the record keeps the text of the header, and also its sets: a semicolon separates two sets, and a comma separates two permissions of one set.
+
 ## The tests
 
 Tests start the service on the fake world of `@mark1russell7/runner-dispatch/testing`, with the fake clock of `@mark1russell7/service/testing`:

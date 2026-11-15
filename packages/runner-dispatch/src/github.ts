@@ -105,6 +105,16 @@ function repositoryPath(repository: string): string {
 const ORGANIZATION = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 
 /**
+ * This function tells if a value is the name of an organization of GitHub: 1 to 39 letters, digits and hyphens, with no hyphen at an end.
+ *
+ * @param value - The value
+ * @returns `true` for the name of an organization
+ */
+export function isOrganizationName(value: unknown): value is string {
+  return typeof value === "string" && ORGANIZATION.test(value);
+}
+
+/**
  * This function gives the scope of the runners of an organization, as the view of a GitHub source names it.
  *
  * @param organization - The name of the organization
@@ -269,7 +279,7 @@ export function createGitHubSource<Signal extends StopSignal = StopSignal>(optio
   const { api, organization } = options;
   const runnerGroup = options.runnerGroup ?? 1;
   if (!isId(runnerGroup)) throw new RangeError("The runner group of a GitHub source is not a whole number from 1.");
-  if (organization !== undefined && (typeof organization !== "string" || !ORGANIZATION.test(organization))) {
+  if (organization !== undefined && !isOrganizationName(organization)) {
     throw new RangeError(`The organization ${show(organization)} of a GitHub source is not a name of GitHub.`);
   }
 
@@ -496,7 +506,7 @@ export async function checkRunnerGroup<Signal extends StopSignal = StopSignal>(
   rules: RunnerGroupRules,
   signal: Signal,
 ): Promise<RunnerGroupCheck> {
-  if (typeof organization !== "string" || !ORGANIZATION.test(organization)) {
+  if (!isOrganizationName(organization)) {
     throw new RangeError(`The organization ${show(organization)} is not a name of GitHub.`);
   }
   if (!isId(runnerGroup)) throw new RangeError("The runner group is not a whole number from 1.");

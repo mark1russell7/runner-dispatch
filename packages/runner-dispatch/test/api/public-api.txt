@@ -101,6 +101,7 @@ decide: build/ports.chunk.d.ts#decide
 due: build/index.d.ts#due
 foldName: build/ports.chunk.d.ts#foldName
 isId: build/ports.chunk.d.ts#isId
+isRepositoryName: build/ports.chunk.d.ts#isRepositoryName
 jobSpans: build/index.d.ts#jobSpans
 jobStarted: build/index.d.ts#jobStarted
 longestLife: build/index.d.ts#longestLife
@@ -140,6 +141,7 @@ RunnerGroupFacts: build/github.d.ts#RunnerGroupFacts
 RunnerGroupRules: build/github.d.ts#RunnerGroupRules
 checkRunnerGroup: build/github.d.ts#checkRunnerGroup
 createGitHubSource: build/github.d.ts#createGitHubSource
+isOrganizationName: build/github.d.ts#isOrganizationName
 judgeRunnerGroup: build/github.d.ts#judgeRunnerGroup
 organizationScope: build/github.d.ts#organizationScope
 
@@ -270,6 +272,9 @@ export declare function checkRunnerGroup<Signal extends StopSignal = StopSignal>
 
 ### build/github.d.ts#createGitHubSource
 export declare function createGitHubSource<Signal extends StopSignal = StopSignal>(options: GitHubSourceOptions<Signal>): JobSource<Signal>;
+
+### build/github.d.ts#isOrganizationName
+export declare function isOrganizationName(value: unknown): value is string;
 
 ### build/github.d.ts#judgeRunnerGroup
 export declare function judgeRunnerGroup(facts: RunnerGroupFacts, rules: RunnerGroupRules): RunnerGroupCheck;
@@ -910,6 +915,9 @@ declare function foldName(name: string): string;
 
 ### build/ports.chunk.d.ts#isId
 declare function isId(value: unknown): value is number;
+
+### build/ports.chunk.d.ts#isRepositoryName
+declare function isRepositoryName(value: unknown): value is string;
 
 ### build/ports.chunk.d.ts#parseCheckSettings
 declare function parseCheckSettings(value: unknown): CheckSettingsResult;

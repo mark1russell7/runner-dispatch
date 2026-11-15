@@ -1,5 +1,10 @@
 # Changes
 
+## 0.1.2
+
+- The root entry exports `isRepositoryName`. The entry `github` exports `isOrganizationName`.
+- The probe of a credential of `@runner-dispatch/dispatcher` uses them to examine its settings.
+
 ## 0.1.1
 
 - The port `JobSource` has the optional method `views`. It gives the views of the repositories of one pass, with one answer for each request.
