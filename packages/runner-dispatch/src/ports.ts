@@ -57,6 +57,15 @@ export interface RepositoryView {
   readonly scope?: string;
 }
 
+/** This record is one repository of a pass, and the runs that the dispatcher names for it. */
+export interface ViewRequest {
+  readonly repository: string;
+  readonly runs: readonly RunKey[];
+}
+
+/** This record is the answer for one repository of a pass: its view, or the error of its read. */
+export type ViewAnswer = { readonly ok: true; readonly view: RepositoryView } | { readonly ok: false; readonly error: unknown };
+
 /** This record is the request for a runner registration that does one job. */
 export interface RunnerRequest {
   /** This field is the repository of the run of the runner, as `owner/name`. The source registers the runner in the scope of this repository. */
@@ -88,6 +97,13 @@ export interface JobSource<Signal extends StopSignal = StopSignal> {
    * The answer is exact for each run that the dispatcher names. A named run that is not in the answer is completed, or it is not there.
    */
   view(repository: string, runs: readonly RunKey[], signal: Signal): Promise<RepositoryView>;
+  /**
+   * This optional method gives the views of the repositories of one pass, with one answer for each request, in their order.
+   * A source can share a read between the views. Then the views of one scope show one list of the registrations.
+   * An answer with an error is the failure of one view. The method throws only when it has no answer for the requests.
+   * The dispatcher uses this method when the source has it, and `view` for each repository when it does not.
+   */
+  views?(requests: readonly ViewRequest[], signal: Signal): Promise<readonly ViewAnswer[]>;
   /** This method makes a runner registration that does one job. */
   register(request: RunnerRequest, signal: Signal): Promise<RunnerRegistration>;
   /** This method removes a runner registration of the scope of a repository. It succeeds when the registration is not there. */

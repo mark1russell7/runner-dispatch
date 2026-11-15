@@ -13,7 +13,7 @@ import {
   type RepositoryObservation,
 } from "./plan.ts";
 import { parseTrustRules, show, TRUST_RULES_FORMAT, type TrustRules } from "./policy.ts";
-import type { JobSource, JobStatus, MachineProvider, ProviderMachine, StopSignal } from "./ports.ts";
+import type { JobSource, JobStatus, MachineProvider, ProviderMachine, StopSignal, ViewAnswer, ViewRequest } from "./ports.ts";
 import { runLabel, sameName, sameRun, type MachineRecord, type RunKey } from "./records.ts";
 import { machineName, runnerLabels, settingsProblems, type DispatchSettings } from "./settings.ts";
 
@@ -133,6 +133,38 @@ const reasonOf = (error: unknown, secret?: string): string => {
 };
 
 /**
+ * This function gives one answer for each request of a pass. It uses `views` of the source when the source has it.
+ * Then a throw or a count of answers that is not the count of the requests is the failure of each view.
+ * Without `views`, it asks `view` for each repository at the same time.
+ */
+async function viewsOf<Signal extends StopSignal>(source: JobSource<Signal>, requests: readonly ViewRequest[], signal: Signal): Promise<readonly ViewAnswer[]> {
+  if (source.views !== undefined) {
+    let answers: readonly ViewAnswer[];
+    try {
+      answers = await source.views(requests, signal);
+    } catch (error) {
+      return requests.map(() => ({ ok: false, error }));
+    }
+    if (Array.isArray(answers) && answers.length === requests.length && answers.every((answer) => typeof answer?.ok === "boolean")) return answers;
+    const error = new Error(
+      Array.isArray(answers)
+        ? `The source gave ${String(answers.length)} answers for ${String(requests.length)} views, or an answer of a wrong shape.`
+        : "The answer of the source to the views is not a list.",
+    );
+    return requests.map(() => ({ ok: false, error }));
+  }
+  return Promise.all(
+    requests.map(async ({ repository, runs }): Promise<ViewAnswer> => {
+      try {
+        return { ok: true, view: await source.view(repository, runs, signal) };
+      } catch (error) {
+        return { ok: false, error };
+      }
+    }),
+  );
+}
+
+/**
  * This function makes a dispatcher. The dispatcher keeps its memory only in the process.
  * A dispatcher that starts again finds each machine in the list of the provider.
  *
@@ -181,20 +213,20 @@ export function createDispatcher<Signal extends StopSignal = StopSignal>(options
 
     // The source gets the run of each machine, also of a machine that the memory does not have.
     const known: readonly MachineRecord[] = [...state.lives.map((each) => each.machine), ...(machines ?? []).map((each) => each.machine)];
-    const views = await Promise.all(
-      rules.repositories.map(async (repository): Promise<RepositoryObservation> => {
-        const runs: RunKey[] = [];
-        for (const machine of known) {
-          if (sameName(machine.repository, repository) && !runs.some((run) => sameRun(machine, run))) runs.push(runOf(machine));
-        }
-        try {
-          return { repository, view: await source.view(repository, runs, signal) };
-        } catch (error) {
-          fail("view", repository, error);
-          return { repository, view: null };
-        }
-      }),
-    );
+    const requests: ViewRequest[] = rules.repositories.map((repository) => {
+      const runs: RunKey[] = [];
+      for (const machine of known) {
+        if (sameName(machine.repository, repository) && !runs.some((run) => sameRun(machine, run))) runs.push(runOf(machine));
+      }
+      return { repository, runs };
+    });
+    const answers = await viewsOf(source, requests, signal);
+    const views = requests.map(({ repository }, index): RepositoryObservation => {
+      const answer = answers[index] as ViewAnswer;
+      if (answer.ok) return { repository, view: answer.view };
+      fail("view", repository, answer.error);
+      return { repository, view: null };
+    });
 
     const read = options.now();
     const viewed = views.flatMap((each) => (each.view === null ? [] : [each.repository]));

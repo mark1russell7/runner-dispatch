@@ -36,6 +36,8 @@ interface StageOptions {
   readonly settings?: DispatchSettings;
   readonly times?: MachineTimes;
   readonly world?: WorldTimes;
+  /** This function gives the source of the dispatcher from the source of the world. The default is the source of the world. */
+  readonly source?: (world: JobSource) => JobSource;
 }
 /** This type is a fake world with a dispatcher on it. A test moves the clock between the passes. */
 interface Stage {
@@ -81,7 +83,7 @@ const stage = (options: StageOptions = {}): Stage => {
         rules: next.rules ?? RULES,
         times: next.times ?? TIMES,
         settings: next.settings ?? SETTINGS,
-        source: made.world.source,
+        source: next.source?.(made.world.source) ?? made.world.source,
         provider: made.world.provider,
         now: () => clock.now(),
         suffix,
@@ -495,6 +497,78 @@ describe("a dispatcher on a fake world: the stop switch", () => {
     expect(odd.made).toEqual([]);
     const off = await createDispatcher({ ...base, stopped: () => Promise.resolve(false) }).pass(signal);
     expect([off.stopped, off.made.length]).toEqual([false, 1]);
+  });
+});
+
+describe("a dispatcher on a source with the views of one pass", () => {
+  const LIB = "octo/lib";
+  const TWO: TrustRules = { ...RULES, repositories: [REPO, LIB] };
+  /** This function makes a source that gives the views of the world through `views`, and counts the calls. Its `view` always fails. */
+  const batched = (calls: string[][]) => (world: JobSource): JobSource => ({
+    ...world,
+    view: () => Promise.reject(new Error("The dispatcher asked view.")),
+    async views(requests, signal) {
+      calls.push(requests.map((request) => request.repository));
+      return Promise.all(requests.map(async ({ repository, runs }) => ({ ok: true as const, view: await world.view(repository, runs, signal) })));
+    },
+  });
+
+  it("asks the views of the source one time for each pass, and does not ask view", async () => {
+    const calls: string[][] = [];
+    const at = stage({ rules: TWO, source: batched(calls) });
+    at.world.addRun(runRecord(), [own()]);
+    at.world.addRun(runRecord(101, { repository: LIB, headRepository: LIB }), [own(4000, 101)]);
+    const report = await at.turn();
+    expect(report.failures).toEqual([]);
+    expect(report.made.map((made) => made.repository).sort()).toEqual([REPO, LIB]);
+    expect(calls).toEqual([[REPO, LIB]]);
+  });
+
+  it("gives the error of one answer to its repository only", async () => {
+    const at = stage({
+      rules: TWO,
+      source: (world) => ({
+        ...world,
+        async views(requests, signal) {
+          return Promise.all(
+            requests.map(async ({ repository, runs }) =>
+              repository === LIB ? { ok: false as const, error: new Error("The list failed.") } : { ok: true as const, view: await world.view(repository, runs, signal) },
+            ),
+          );
+        },
+      }),
+    });
+    at.world.addRun(runRecord(), [own()]);
+    const report = await at.turn();
+    expect(report.failures).toEqual([{ request: "view", target: LIB, text: '"The list failed."' }]);
+    expect(report.made.map((made) => made.repository)).toEqual([REPO]);
+  });
+
+  it("gives a failure of each view when views throws, or gives a count of answers that is not the count of the requests", async () => {
+    const answers: (readonly unknown[] | Error | null)[] = [new Error("The source is down."), [], [{ ok: true }], null, [{ view: {} }, { view: {} }]];
+    const texts = [
+      '"The source is down."',
+      '"The source gave 0 answers for 2 views, or an answer of a wrong shape."',
+      '"The source gave 1 answers for 2 views, or an answer of a wrong shape."',
+      '"The answer of the source to the views is not a list."',
+      '"The source gave 2 answers for 2 views, or an answer of a wrong shape."',
+    ];
+    for (const [index, answer] of answers.entries()) {
+      const at = stage({
+        rules: TWO,
+        source: (world) => ({
+          ...world,
+          views: () => (answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer as never)),
+        }),
+      });
+      at.world.addRun(runRecord(), [own()]);
+      const report = await at.turn();
+      expect(report.failures).toEqual([
+        { request: "view", target: REPO, text: texts[index] },
+        { request: "view", target: LIB, text: texts[index] },
+      ]);
+      expect([report.made, report.removals]).toEqual([[], []]);
+    }
   });
 });
 

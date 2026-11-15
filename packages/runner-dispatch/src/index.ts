@@ -85,6 +85,8 @@ export type {
   SourceRun,
   SourceRunner,
   StopSignal,
+  ViewAnswer,
+  ViewRequest,
 } from "./ports.ts";
 export {
   EMPTY_STATE,

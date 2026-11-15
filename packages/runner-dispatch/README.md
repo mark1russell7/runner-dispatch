@@ -397,6 +397,7 @@ A host gives the dispatcher two ports. `JobSource` is the source of the jobs, fo
 | Method | Work |
 | --- | --- |
 | `source.view(repository, runs, signal)` | It gives the runs of a repository that are not completed, and the runner registrations of its scope. |
+| `source.views(requests, signal)` | This method is optional. It gives the views of the repositories of one pass, with one answer for each request. A source can share one list of the registrations of a scope between the views. |
 | `source.register(request, signal)` | It makes a runner registration for one job. It gives the id and the one-job configuration. |
 | `source.remove(repository, runnerId, signal)` | It removes a registration. It succeeds when the registration is not there. |
 | `provider.make(request, signal)` | It asks for a machine. It ends when the provider accepts the request, before the machine operates. |
@@ -448,7 +449,7 @@ const dispatcher = createDispatcher({ rules, times, settings, source, provider, 
 const report = await dispatcher.pass(signal);
 ```
 
-1. The pass reads the stop switch, the machines of the provider and the view of each repository of the trust rules.
+1. The pass reads the stop switch, the machines of the provider and the view of each repository of the trust rules. It uses `source.views` when the source has it, and else `source.view` for each repository.
 2. The pass makes the plan.
 3. The pass removes registrations and destroys machines. The two groups of requests start together.
 4. The pass makes a registration for each new machine, then it asks the provider for the machine.
@@ -541,7 +542,7 @@ The client `createRestClient` goes to `@procedures/gh`, the package of the calls
 | `GET /repos/{repository}/actions/runs?status={status}` | One for each status of `OPEN_RUN_STATUSES`: `queued`, `in_progress`, `requested`, `waiting` and `pending`. |
 | `GET /repos/{repository}/actions/runs/{run}` | One for each named run that is not in the lists. |
 | `GET /repos/{repository}/actions/runs/{run}/attempts/{try}/jobs` | One for each open run. |
-| `GET /repos/{repository}/actions/runners` | One. |
+| `GET /repos/{repository}/actions/runners` | One. With an organization, `GET /orgs/{organization}/actions/runners` is one for each pass. |
 
 Each list has pages of 100 items. A longer list needs one request for each page.
 
@@ -599,7 +600,13 @@ One pass for `r` repositories sends `G = 6r + o + n` requests `GET` when each li
 
 For example, 40 repositories with no open run give `G = 240`. A pass each 16 seconds then uses the full limit of 900 points a minute. Thus such a dispatcher needs a longer period, or a token for each group of repositories.
 
-With an organization, each view also lists the runners of the organization. Thus `G` stays the same. One list of the organization runners for each pass is an open point of the roadmap.
+With an organization, the method `views` lists the runners of the organization one time for each pass. The list starts after the runs of each repository of the pass, so it is newer than each run of its views. Each view of the organization then shows the same list.
+
+Thus one pass for `r` repositories of an organization sends `G = 5r + o + n + 1` requests `GET`. For 40 repositories with no open run, `G = 201`. Then a pass each 13.4 seconds uses the full limit of 900 points a minute.
+
+- A failure of the runs of one repository is the failure of its view only.
+- A failure of the list of a scope is the failure of each view of that scope.
+- A repository that is not of the organization gets an error, and the source sends no request for it.
 
 ### What the source does not do yet
 

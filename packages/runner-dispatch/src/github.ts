@@ -9,6 +9,8 @@ import type {
   SourceRun,
   SourceRunner,
   StopSignal,
+  ViewAnswer,
+  ViewRequest,
 } from "./ports.ts";
 import { foldName, isId, sameName, type RunKey, type RunRecord } from "./records.ts";
 
@@ -150,6 +152,12 @@ async function listAll<Signal extends StopSignal>(
   return items;
 }
 
+/** This record is the read of the runs of one repository, with the path of its registrations. Or it is the error of the read. */
+type RunsRead = { readonly ok: true; readonly at: string; readonly runs: SourceRun[] } | { readonly ok: false; readonly error: unknown };
+
+/** This record is one list of the registrations of a scope, or the error of the list. */
+type RunnersRead = { readonly ok: true; readonly runners: readonly SourceRunner[] } | { readonly ok: false; readonly error: unknown };
+
 /** This record is a run of a list, with its status. */
 interface ListedRun {
   readonly record: RunRecord;
@@ -250,7 +258,8 @@ function readRunner(value: unknown): SourceRunner {
  * This function makes a source of jobs on the REST API of GitHub, for runners that register on a repository or on an organization.
  * Its view uses one list of runs for each open status and a request for each named run that is not in the lists.
  * It then reads the jobs of each open run and the runners of the scope.
- * With an organization, each view lists the runners of the organization, and it has the scope `organizationScope(organization)`.
+ * With an organization, each view has the scope `organizationScope(organization)`. Its method `views` lists the runners of a scope
+ * one time for each pass, after the runs of each repository of the pass.
  *
  * @param options - The client of the REST API, the runner group and the organization
  * @returns The source
@@ -281,41 +290,85 @@ export function createGitHubSource<Signal extends StopSignal = StopSignal>(optio
   const list = (path: string, query: Readonly<Record<string, string>>, key: string, signal: Signal, limit: number): Promise<unknown[]> =>
     listAll(api, path, query, key, signal, limit);
 
+  /** This function reads the runs of a repository that are not completed, and the jobs of each run. */
+  const readRuns = async (repository: string, runs: readonly RunKey[], signal: Signal): Promise<SourceRun[]> => {
+    const base = repositoryPath(repository);
+    const open = new Map<number, RunRecord>();
+    const keep = (listed: ListedRun): void => {
+      if (listed.status === "completed") return;
+      const known = open.get(listed.record.runId);
+      if (known === undefined || known.runAttempt < listed.record.runAttempt) open.set(listed.record.runId, listed.record);
+    };
+    for (const status of OPEN_RUN_STATUSES) {
+      const items = await list(`${base}/actions/runs`, { status }, "workflow_runs", signal, RUN_LIST_LIMIT);
+      for (const item of items) keep(readRun(item, repository));
+    }
+    for (const named of runs) {
+      if (!sameName(named.repository, repository) || !isId(named.runId) || open.has(named.runId)) continue;
+      const answer = await send({ method: "GET", path: `${base}/actions/runs/${named.runId}`, query: {}, body: null }, signal);
+      if (answer.status === 404) continue;
+      if (answer.status !== 200) {
+        throw new Error(`GitHub answered the request for the run ${named.runId} with the status ${showStatus(answer.status)}.`);
+      }
+      const found = readRun(answer.body, repository);
+      if (found.record.runId !== named.runId) throw new Error(`GitHub answered the request for the run ${named.runId} with a different run.`);
+      keep(found);
+    }
+    const sourceRuns: SourceRun[] = [];
+    for (const run of open.values()) {
+      const path = `${base}/actions/runs/${run.runId}/attempts/${run.runAttempt}/jobs`;
+      const items = await list(path, {}, "jobs", signal, Number.MAX_SAFE_INTEGER);
+      const jobs = items.map((item) => readJob(item, run)).filter((job): job is SourceJob => job !== null);
+      sourceRuns.push({ run, jobs });
+    }
+    return sourceRuns;
+  };
+
+  /**
+   * This function gives the views of the repositories of one pass. It reads the runs of each repository at the same time.
+   * After each read of runs, it lists the registrations of each scope one time. Thus each view of one scope shows one list.
+   * Each list is also newer than the runs of its views. A repository that is not of the organization gets an error, and no request.
+   */
+  const views = async (requests: readonly ViewRequest[], signal: Signal): Promise<ViewAnswer[]> => {
+    const reads = await Promise.all(
+      requests.map(async ({ repository, runs }): Promise<RunsRead> => {
+        try {
+          const at = runnersPath(repository);
+          return { ok: true, at, runs: await readRuns(repository, runs, signal) };
+        } catch (error) {
+          return { ok: false, error };
+        }
+      }),
+    );
+    const paths = [...new Set(reads.flatMap((read) => (read.ok ? [read.at] : [])))];
+    const lists = new Map(
+      await Promise.all(
+        paths.map(async (at): Promise<[string, RunnersRead]> => {
+          try {
+            return [at, { ok: true, runners: (await list(at, {}, "runners", signal, Number.MAX_SAFE_INTEGER)).map(readRunner) }];
+          } catch (error) {
+            return [at, { ok: false, error }];
+          }
+        }),
+      ),
+    );
+    return reads.map((read): ViewAnswer => {
+      if (!read.ok) return read;
+      const listed = lists.get(read.at) as RunnersRead;
+      if (!listed.ok) return listed;
+      const runners = [...listed.runners];
+      return { ok: true, view: organization === undefined ? { runs: read.runs, runners } : { runs: read.runs, runners, scope: organizationScope(organization) } };
+    });
+  };
   return {
     async view(repository: string, runs: readonly RunKey[], signal: Signal): Promise<RepositoryView> {
-      const base = repositoryPath(repository);
-      const runnersAt = runnersPath(repository);
-      const open = new Map<number, RunRecord>();
-      const keep = (listed: ListedRun): void => {
-        if (listed.status === "completed") return;
-        const known = open.get(listed.record.runId);
-        if (known === undefined || known.runAttempt < listed.record.runAttempt) open.set(listed.record.runId, listed.record);
-      };
-      for (const status of OPEN_RUN_STATUSES) {
-        const items = await list(`${base}/actions/runs`, { status }, "workflow_runs", signal, RUN_LIST_LIMIT);
-        for (const item of items) keep(readRun(item, repository));
-      }
-      for (const named of runs) {
-        if (!sameName(named.repository, repository) || !isId(named.runId) || open.has(named.runId)) continue;
-        const answer = await send({ method: "GET", path: `${base}/actions/runs/${named.runId}`, query: {}, body: null }, signal);
-        if (answer.status === 404) continue;
-        if (answer.status !== 200) {
-          throw new Error(`GitHub answered the request for the run ${named.runId} with the status ${showStatus(answer.status)}.`);
-        }
-        const found = readRun(answer.body, repository);
-        if (found.record.runId !== named.runId) throw new Error(`GitHub answered the request for the run ${named.runId} with a different run.`);
-        keep(found);
-      }
-      const sourceRuns: SourceRun[] = [];
-      for (const run of open.values()) {
-        const path = `${base}/actions/runs/${run.runId}/attempts/${run.runAttempt}/jobs`;
-        const items = await list(path, {}, "jobs", signal, Number.MAX_SAFE_INTEGER);
-        const jobs = items.map((item) => readJob(item, run)).filter((job): job is SourceJob => job !== null);
-        sourceRuns.push({ run, jobs });
-      }
-      const runners = (await list(runnersAt, {}, "runners", signal, Number.MAX_SAFE_INTEGER)).map(readRunner);
-      return organization === undefined ? { runs: sourceRuns, runners } : { runs: sourceRuns, runners, scope: organizationScope(organization) };
+      const [answer] = await views([{ repository, runs }], signal);
+      if (answer === undefined) throw new Error("The source gave no answer for the view.");
+      if (!answer.ok) throw answer.error;
+      return answer.view;
     },
+
+    views,
 
     async register(request: RunnerRequest, signal: Signal): Promise<RunnerRegistration> {
       const runnersAt = runnersPath(request.repository);
