@@ -13,6 +13,7 @@ export {
 } from "./records.ts";
 export {
   decide,
+  isRepositoryName,
   OUTSIDE_INPUT_EVENTS,
   parseTrustRules,
   TRUST_RULES_FORMAT,

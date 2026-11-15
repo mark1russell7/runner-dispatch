@@ -27,6 +27,7 @@ describe("the entry", () => {
       "due",
       "foldName",
       "isId",
+      "isRepositoryName",
       "jobSpans",
       "jobStarted",
       "longestLife",

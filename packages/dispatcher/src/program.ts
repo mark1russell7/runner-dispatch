@@ -113,6 +113,11 @@ const PROBES_KEYS: readonly string[] = ["host", "port"];
 const LOOP_KEYS: readonly string[] = ["sleep", "bound", "retry", "retryMax", "close"];
 const GITHUB_TOKEN = /^[!-~]{1,1024}$/;
 
+/** This function tells if a value can be a token of GitHub: 1 to 1,024 printable ASCII characters, with no space. */
+export function isGitHubToken(value: unknown): value is string {
+  return typeof value === "string" && GITHUB_TOKEN.test(value);
+}
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
 const isWhole = (value: unknown, low: number, high: number): value is number => typeof value === "number" && Number.isInteger(value) && value >= low && value <= high;
 
@@ -246,7 +251,7 @@ export function readSecrets(env: Readonly<Record<string, string | undefined>>): 
   const proxmox = env[SECRET_VARIABLES.proxmox];
   const problems: string[] = [];
   if (github === undefined || github === "") problems.push(`The variable ${SECRET_VARIABLES.github} is not set.`);
-  else if (!GITHUB_TOKEN.test(github)) problems.push(`The variable ${SECRET_VARIABLES.github} is not a token: it has a space, a line break or a character that is not ASCII.`);
+  else if (!isGitHubToken(github)) problems.push(`The variable ${SECRET_VARIABLES.github} is not a token: it has a space, a line break or a character that is not ASCII.`);
   if (proxmox === undefined || proxmox === "") problems.push(`The variable ${SECRET_VARIABLES.proxmox} is not set.`);
   else if (!isProxmoxToken(proxmox)) problems.push(`The variable ${SECRET_VARIABLES.proxmox} is not of the form USER@REALM!TOKENID=SECRET.`);
   return problems.length > 0 || github === undefined || proxmox === undefined ? { ok: false, problems } : { ok: true, value: { github, proxmox } };

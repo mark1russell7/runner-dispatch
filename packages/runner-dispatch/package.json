@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@mark1russell7/runner-dispatch",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "One-job CI runners for trusted jobs: the records of a run, a job and a machine, the trust rules as data, the check on the machine, the life of a machine as a state machine, the dispatcher, the GitHub source and the Proxmox provider.",
   "license": "MIT",
   "repository": {
