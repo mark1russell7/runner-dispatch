@@ -1,5 +1,6 @@
 import type { JobSight, PassReport } from "./dispatcher.ts";
-import type { MachineEvent, MachineState } from "./lifecycle.ts";
+import { MACHINE_EVENTS, type MachineEvent, type MachineState } from "./lifecycle.ts";
+import { isObject, isRepositoryName } from "./policy.ts";
 import type { JobStatus } from "./ports.ts";
 import { foldName, isId, sameName, type RunKey } from "./records.ts";
 
@@ -385,4 +386,61 @@ export interface JobSpans {
  */
 export function jobSpans(record: JobMeasure): JobSpans {
   return { queue: spanOf(record.queued, record.started), run: spanOf(record.started, record.completed) };
+}
+
+const JOB_STATUSES: readonly unknown[] = ["queued", "in_progress", "completed"];
+
+const isTime = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+const isText = (value: unknown): value is string | null => value === null || typeof value === "string";
+
+/** This type has the fields of the type `T`, each with an unknown value. A guard reads the fields of a value through it. */
+type Fields<T> = { readonly [K in keyof T]?: unknown };
+
+const fieldsOf = <T>(value: unknown): Fields<T> | null => (isObject(value) ? (value as Fields<T>) : null);
+
+/**
+ * This function tells if a value is a moment: a finite time `at`, and an earliest time `after` that is `null` or not later.
+ *
+ * @param value - The value to examine
+ * @returns `true` when the value is a moment
+ */
+export function isMoment(value: unknown): value is Moment {
+  const moment = fieldsOf<Moment>(value);
+  if (moment === null) return false;
+  const { at, after } = moment;
+  return isTime(at) && (after === null || (isTime(after) && after <= at));
+}
+
+const isMomentOrNull = (value: unknown): boolean => value === null || isMoment(value);
+
+/**
+ * This function tells if a value is a record `machine-measure/1`. It examines the format, the run, the event and each time.
+ * A program that reads the records from a log uses it.
+ *
+ * @param value - The value to examine
+ * @returns `true` when the value is such a record
+ */
+export function isMachineMeasure(value: unknown): value is MachineMeasure {
+  const record = fieldsOf<MachineMeasure>(value);
+  if (record === null || record.format !== MACHINE_MEASURE_FORMAT || typeof record.machine !== "string" || !isText(record.size)) return false;
+  const run = fieldsOf<MachineMeasure["run"]>(record.run);
+  if (run === null || !isRepositoryName(run.repository) || !isId(run.runId) || !isId(run.runAttempt)) return false;
+  if (record.asked !== null && !isTime(record.asked)) return false;
+  if (record.end !== null && !(MACHINE_EVENTS as readonly unknown[]).includes(record.end)) return false;
+  return [record.made, record.registered, record.started, record.ended, record.destroyed].every(isMomentOrNull);
+}
+
+/**
+ * This function tells if a value is a record `job-measure/1`. It examines the format, the ids, the status and each time.
+ * A program that reads the records from a log uses it.
+ *
+ * @param value - The value to examine
+ * @returns `true` when the value is such a record
+ */
+export function isJobMeasure(value: unknown): value is JobMeasure {
+  const record = fieldsOf<JobMeasure>(value);
+  if (record === null || record.format !== JOB_MEASURE_FORMAT || !isRepositoryName(record.repository) || !isText(record.runner)) return false;
+  if (!isId(record.runId) || !isId(record.runAttempt) || !isId(record.jobId) || !JOB_STATUSES.includes(record.last)) return false;
+  return isMoment(record.queued) && isMomentOrNull(record.started) && isMomentOrNull(record.completed);
 }

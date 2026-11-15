@@ -245,6 +245,9 @@ importers:
       '@mark1russell7/quantity':
         specifier: ^0.4.0
         version: 0.4.1(zod@4.6.7)
+      '@mark1russell7/rigor-statistics':
+        specifier: ^0.2.1
+        version: 0.2.1
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0

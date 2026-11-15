@@ -119,6 +119,9 @@ export {
   EMPTY_MEASURES,
   JOB_MEASURE_FORMAT,
   MACHINE_MEASURE_FORMAT,
+  isJobMeasure,
+  isMachineMeasure,
+  isMoment,
   jobSpans,
   machineSpans,
   noteReport,
@@ -133,3 +136,17 @@ export {
   type Span,
   type ViewRead,
 } from "./measures.ts";
+export {
+  MEASURE_SUMMARY_FORMAT,
+  SUMMARY_LEVELS,
+  summarizeMeasures,
+  summarizeSpans,
+  type JobSummary,
+  type MachineSummary,
+  type MeasureRecords,
+  type MeasureSummary,
+  type Period,
+  type QuantileBounds,
+  type SpanSummary,
+  type SummaryOptions,
+} from "./summary.ts";

@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node src/bin.ts",
     "probe": "node src/probe-bin.ts",
+    "measures": "node src/measures-bin.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
