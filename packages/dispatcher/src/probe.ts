@@ -33,6 +33,10 @@ export const PROBE_TRIES_MAX = 50;
  */
 export const PROBE_ROUNDS = 3;
 
+/** This text is the error of a probe when GitHub refuses the token with an answer 401. */
+export const PROBE_TOKEN_REFUSED =
+  "GitHub refused the token with an answer 401. The token is not valid, it expired, or the organization did not approve it. The probe made no runner and no group.";
+
 /** This constant is the longest time of one request that removes a runner or a group, in milliseconds. A stop of the probe does not stop it. */
 export const CLEANUP_MS = 30_000;
 
@@ -366,6 +370,7 @@ interface Sent {
  * @param ports - The token, the transport, the names and the signal
  * @returns The record of the probe
  * @throws RangeError when the settings are not valid
+ * @throws Error with the text `PROBE_TOKEN_REFUSED` when GitHub answers 401 to the read of the rate, before the probe makes a runner or a group
  */
 export async function probeGitHub(settings: ProbeSettings, ports: ProbePorts): Promise<ProbeRecord> {
   const problems = settingsProblems(settings);
@@ -431,6 +436,8 @@ export async function probeGitHub(settings: ProbeSettings, ports: ProbePorts): P
     // A new client has no stored answer, thus the first request of the list of each round is a full request.
     const conditional = createRestClient(options);
     const before = await send(plain, "rate", "GET", "/rate_limit");
+    // An answer 401 refuses the token itself, so no request after it measures a fact. No runner and no group exist yet.
+    if (before.step.status === 401) throw new Error(PROBE_TOKEN_REFUSED);
     const again = await send(plain, "rate-again", "GET", "/rate_limit");
     const first = await send(conditional, "runs", "GET", `${repo}/actions/runs`, list);
     const tries: Sent[] = [];

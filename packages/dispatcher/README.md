@@ -192,6 +192,7 @@ node.exe src/probe-bin.ts --token-stdin --repository octo/app --out probe.json <
 - A stop with Ctrl+C stops the steps, but the probe still removes its runner and its group.
 - The record `github-probe/1` goes to stdout as JSON, or to the file of `--out`. The exit code 1 tells that a runner or a group stays on GitHub.
 - With `--token-stdin`, a terminal on stdin is a mistake, and the probe stops before a request. A text with a space or two lines is not a token.
+- When GitHub refuses the token with an answer 401, the probe stops after its first request, before it makes a runner or a group. It writes no record, and the exit code is 1.
 
 The primary limit of a token is the limit of its user. Thus each other client of the user adds noise to the measure of an answer 304:
 
