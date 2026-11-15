@@ -15,10 +15,13 @@ describe("the home page", () => {
     expect(page).toContain('href="https://github.com/mark1russell7/runner-dispatch"');
   });
 
-  it("has the elements of the two demos", () => {
-    for (const id of ["scenarios", "run-form", "rules", "verdict", "checks", "states", "timer-text", "delay", "events", "wait", "restart", "log", "times"]) {
+  it("has the elements of the three demos", () => {
+    const ids = ["scenarios", "run-form", "rules", "verdict", "checks", "states", "timer-text", "delay", "events", "wait", "restart", "log", "times"];
+    const measures = ["span-choice", "pass", "pass-out", "job-count", "resample", "measure-text", "chart", "chart-tip", "levels-body", "summary-json"];
+    for (const id of [...ids, ...measures]) {
       expect(page).toContain(`id="${id}"`);
     }
+    expect(page).toContain("A sample, not real data.");
     for (const field of ["repository", "event", "headRepository", "actor", "triggeringActor", "attempt"]) {
       expect(page).toContain(`<label for="f-${field}">`);
       expect(page).toContain(`id="f-${field}"`);
