@@ -8,6 +8,7 @@ import {
   headerOf,
   parsePermissions,
   PROBE_LABEL,
+  PROBE_ROUNDS,
   PROBE_TRIES_MAX,
   PROBE_TRIES_MIN,
   probeGitHub,
@@ -267,7 +268,7 @@ describe("conditionalCost", () => {
   it("gives the cost of an answer 304 for each count of tries", () => {
     for (let tries = PROBE_TRIES_MIN; tries <= 8; tries += 1) {
       for (const cost of [0, 1, 2]) {
-        expect(conditionalCost(clean(tries, cost), all304(tries))).toMatchObject({ tries, notModified: tries, clean: true, cost, reason: null });
+        expect(conditionalCost(clean(tries, cost), all304(tries))).toMatchObject({ tries, notModified: tries, clean: true, noisy: false, cost, reason: null });
       }
     }
   });
@@ -282,6 +283,7 @@ describe("conditionalCost", () => {
             const measure = conditionalCost(used, all304(tries));
             expect(measure.cost, `tries ${tries}, cost ${cost}, gap ${gap}, amount ${amount}`).toBeNull();
             expect(measure.clean).toBe(false);
+            expect(measure.noisy).toBe(true);
           }
         }
       }
@@ -293,7 +295,8 @@ describe("conditionalCost", () => {
     expect(conditionalCost([40, 40, 41, null, 41, 41], all304(2)).reason).toBe("A step of the measure has no count of the used requests.");
     expect(conditionalCost([40, 40, 41], all304(2)).reason).toBe("A step of the measure has no count of the used requests.");
     expect(conditionalCost([40, 40, 41, 40, 39, 39], all304(2)).cost).toBeNull();
-    expect(conditionalCost(clean(3, 0), [304, 200, 304]).reason).toBe("GitHub did not answer each conditional request with the status 304.");
+    expect(conditionalCost(clean(3, 0), [304, 200, 304])).toMatchObject({ noisy: false, reason: "GitHub did not answer each conditional request with the status 304." });
+    expect(conditionalCost(clean(1, 0), all304(1)).noisy).toBe(false);
   });
 });
 
@@ -346,7 +349,8 @@ describe("probeGitHub", () => {
       "runner-remove",
     ]);
     expect(record).toMatchObject({ format: "github-probe/1", at: "2026-11-15T20:00:00.000Z", repository: "octo/app", organization: null, token: "fine-grained", scopes: null });
-    expect(record.conditional).toMatchObject({ tries: 3, notModified: 3, clean: true, cost: 0, reason: null });
+    expect(record.conditional).toMatchObject({ tries: 3, notModified: 3, clean: true, noisy: false, cost: 0, reason: null });
+    expect(record.rounds).toBe(1);
     expect(record.runner).toEqual({
       made: true,
       labels: [
@@ -379,9 +383,20 @@ describe("probeGitHub", () => {
     expect(record.conditional).toMatchObject({ clean: true, cost: 1, used: [40, 40, 41, 42, 43, 44, 44] });
   });
 
-  it("gives no read of the cost when another client uses the token", async () => {
+  it("repeats a round with the requests of another client, and gives the read of the next clean round", async () => {
     const { record } = await probe(REPOSITORY, { others: (index) => (index === 5 ? 1 : 0) });
-    expect(record.conditional).toMatchObject({ clean: false, cost: null, reason: "The conditional requests added different counts: another client used the token." });
+    expect(record.rounds).toBe(2);
+    expect(record.conditional).toMatchObject({ clean: true, noisy: false, cost: 0, used: [42, 42, 43, 43, 43, 43, 43] });
+    expect(stepsOf(record).slice(0, 14)).toEqual([...Array.from({ length: 2 }, () => ["rate", "rate-again", "runs", "runs-conditional", "runs-conditional", "runs-conditional", "rate-after"]).flat()]);
+    expect(stepsOf(record)[14]).toBe("repository");
+  });
+
+  it("gives no read of the cost when another client uses the token in each round", async () => {
+    const { record } = await probe(REPOSITORY, { others: () => 1 });
+    expect(record.rounds).toBe(PROBE_ROUNDS);
+    expect(record.conditional).toMatchObject({ clean: false, noisy: true, cost: null, reason: "The count changed between two reads of the rate: another client used the token." });
+    expect(stepsOf(record).filter((step) => step === "rate-after")).toHaveLength(PROBE_ROUNDS);
+    expect(record.clean).toBe(true);
   });
 
   it("skips the run and its jobs in a repository with no run", async () => {
@@ -465,7 +480,8 @@ describe("probeGitHub", () => {
     for (const step of record.steps.filter((each) => each.path.includes("/actions/runs"))) {
       expect(step).toMatchObject({ status: 403, permissions: "actions=read", problem: null });
     }
-    expect(record.conditional.cost).toBeNull();
+    expect(record.conditional).toMatchObject({ cost: null, noisy: false });
+    expect(record.rounds).toBe(1);
   });
 });
 

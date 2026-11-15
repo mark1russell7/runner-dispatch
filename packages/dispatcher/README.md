@@ -165,12 +165,13 @@ node src/probe-bin.ts --repository octo/app --organization octo --group
 - A stop with Ctrl+C stops the steps, but the probe still removes its runner and its group.
 - The record `github-probe/1` goes to stdout as JSON. The exit code 1 tells that a runner or a group stays on GitHub.
 
-The measure of an answer 304 needs a token that no other client uses during the probe:
+The primary limit of a token is the limit of its user. Thus each other client of the user adds noise to the measure of an answer 304:
 
 - The probe reads the rate two times, sends the list of runs, and sends the same list again with its `ETag`. Then it reads the rate again.
 - A read of the rate costs nothing. Thus with no other client, the two reads are equal, and the first list adds 1.
 - Each conditional request must add the same count, and the last read must be equal to the last conditional request.
 - Else the measure has no read. Requests of another client in one gap of the sequence give no read, and not a wrong cost.
+- The probe repeats a round with noise, at most 3 times. The field `rounds` of the record has the count.
 
 The docs of GitHub do not fix the format of the header of the permissions. Thus the record keeps the text of the header, and also its sets. A semicolon separates two sets, and a comma separates two permissions of one set.
 

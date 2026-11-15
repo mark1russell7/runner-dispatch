@@ -27,6 +27,12 @@ export const PROBE_TRIES_MIN = 2;
 /** This constant is the largest count of the conditional requests of one probe. */
 export const PROBE_TRIES_MAX = 50;
 
+/**
+ * This constant is the most rounds of the measure of an answer 304. The primary limit of a token is the limit of its user.
+ * Thus each other client of the user adds noise, and the probe repeats a round with noise.
+ */
+export const PROBE_ROUNDS = 3;
+
 /** This constant is the longest time of one request that removes a runner or a group, in milliseconds. A stop of the probe does not stop it. */
 export const CLEANUP_MS = 30_000;
 
@@ -112,6 +118,8 @@ export interface ConditionalMeasure {
   readonly used: readonly (number | null)[];
   /** This field is `true` when no other client used the token during the measure. */
   readonly clean: boolean;
+  /** This field is `true` when the counts show the requests of another client. Another round can then give a read. */
+  readonly noisy: boolean;
   /** This field is the count of the requests of the primary limit for one answer 304, or `null` with no read. */
   readonly cost: number | null;
   /** This field tells why the measure has no read, or it is `null`. */
@@ -162,7 +170,10 @@ export interface ProbeRecord {
   /** This field is the header `x-oauth-scopes` of a classic token, or `null`. */
   readonly scopes: string | null;
   readonly steps: readonly ProbeStep[];
+  /** This field is the measure of the last round. */
   readonly conditional: ConditionalMeasure;
+  /** This field is the count of the rounds of the measure, from 1 to `PROBE_ROUNDS`. */
+  readonly rounds: number;
   readonly runner: ProbeRunner;
   /** This list has the runner groups of the organization, or it is `null` with no organization or no read. */
   readonly groups: readonly GroupFacts[] | null;
@@ -263,21 +274,21 @@ export function conditionalCost(used: readonly (number | null)[], statuses: read
   const tries = statuses.length;
   const notModified = statuses.filter((status) => status === 304).length;
   const base = { tries, notModified, used: [...used] };
-  const none = (reason: string): ConditionalMeasure => ({ ...base, clean: false, cost: null, reason });
+  const none = (reason: string, noisy = false): ConditionalMeasure => ({ ...base, clean: false, noisy, cost: null, reason });
   if (tries < PROBE_TRIES_MIN) return none(`The measure needs ${PROBE_TRIES_MIN} conditional requests or more.`);
   if (used.length !== tries + 4 || used.some((count) => count === null)) return none("A step of the measure has no count of the used requests.");
   const [before, again, first] = used as [number, number, number];
   const last = used[used.length - 2] as number;
   const after = used[used.length - 1] as number;
   if (notModified !== tries) return none("GitHub did not answer each conditional request with the status 304.");
-  if (before !== again) return none("The count changed between two reads of the rate: another client used the token.");
-  if (first !== again + 1) return none("The first request did not add 1 to the count: another client used the token.");
-  if (after !== last) return none("The count changed after the last conditional request: another client used the token.");
+  if (before !== again) return none("The count changed between two reads of the rate: another client used the token.", true);
+  if (first !== again + 1) return none("The first request did not add 1 to the count: another client used the token.", true);
+  if (after !== last) return none("The count changed after the last conditional request: another client used the token.", true);
   const counts = used.slice(2, used.length - 1) as number[];
   const added = counts.slice(1).map((count, index) => count - (counts[index] as number));
   const cost = added[0] as number;
-  if (added.some((each) => each !== cost) || cost < 0) return none("The conditional requests added different counts: another client used the token.");
-  return { ...base, clean: true, cost, reason: null };
+  if (added.some((each) => each !== cost) || cost < 0) return none("The conditional requests added different counts: another client used the token.", true);
+  return { ...base, clean: true, noisy: false, cost, reason: null };
 }
 
 /** This function gives the facts of a runner group, as GitHub gives it. */
@@ -345,7 +356,8 @@ interface Sent {
  * 4. A one-job runner with the labels, in the probe group or in the default group 1. The probe reads it and removes it.
  * 5. The probe removes the probe group.
  *
- * No other request comes between the steps of the measure, thus the counts of the rate show only the probe.
+ * No other request of the probe comes between the steps of the measure. A round with the requests of another client
+ * gives no read, thus the probe repeats it, at most `PROBE_ROUNDS` times. Each round has a new client with no stored answer.
  *
  * The probe keeps only the id of the runner from the answer of the creation, thus the record has no one-job configuration.
  * A stop of the signal does not stop the two removals.
@@ -366,9 +378,8 @@ export async function probeGitHub(settings: ProbeSettings, ports: ProbePorts): P
     return reply;
   };
   const options = { token: ports.token, baseUrl: ports.baseUrl, userAgent: ports.userAgent, transport, ...(ports.clock === undefined ? {} : { clock: ports.clock }) };
-  // The plain client stores no answer, thus each of its requests is a full request. The conditional client stores the answer with its ETag.
+  // The plain client stores no answer, thus each of its requests is a full request. A conditional client stores the answer with its ETag.
   const plain = createRestClient({ ...options, cacheEntries: 0 });
-  const conditional = createRestClient(options);
   const cleanupSignal = ports.cleanupSignal ?? ((): AbortSignal => AbortSignal.timeout(CLEANUP_MS));
   const steps: ProbeStep[] = [];
 
@@ -414,18 +425,28 @@ export async function probeGitHub(settings: ProbeSettings, ports: ProbePorts): P
   const runnersAt = settings.organization === null ? `${repo}/actions/runners` : `/orgs/${settings.organization}/actions/runners`;
   const page = { per_page: "100", page: "1" };
 
-  // 1. The measure of an answer 304: no other request comes between its steps.
-  const before = await send(plain, "rate", "GET", "/rate_limit");
-  const again = await send(plain, "rate-again", "GET", "/rate_limit");
+  // 1. The measure of an answer 304: no other request of the probe comes between its steps.
   const list = { status: "queued", ...page };
-  const first = await send(conditional, "runs", "GET", `${repo}/actions/runs`, list);
-  const tries: Sent[] = [];
-  for (let index = 0; index < settings.tries; index += 1) tries.push(await send(conditional, "runs-conditional", "GET", `${repo}/actions/runs`, list));
-  const after = await send(plain, "rate-after", "GET", "/rate_limit");
-  const measure = conditionalCost(
-    [rateUsed(before), rateUsed(again), first.step.used, ...tries.map((each) => each.step.used), rateUsed(after)],
-    tries.map((each) => each.step.status),
-  );
+  const round = async (): Promise<ConditionalMeasure> => {
+    // A new client has no stored answer, thus the first request of the list of each round is a full request.
+    const conditional = createRestClient(options);
+    const before = await send(plain, "rate", "GET", "/rate_limit");
+    const again = await send(plain, "rate-again", "GET", "/rate_limit");
+    const first = await send(conditional, "runs", "GET", `${repo}/actions/runs`, list);
+    const tries: Sent[] = [];
+    for (let index = 0; index < settings.tries; index += 1) tries.push(await send(conditional, "runs-conditional", "GET", `${repo}/actions/runs`, list));
+    const after = await send(plain, "rate-after", "GET", "/rate_limit");
+    return conditionalCost(
+      [rateUsed(before), rateUsed(again), first.step.used, ...tries.map((each) => each.step.used), rateUsed(after)],
+      tries.map((each) => each.step.status),
+    );
+  };
+  let measure = await round();
+  let rounds = 1;
+  while (measure.noisy && rounds < PROBE_ROUNDS) {
+    measure = await round();
+    rounds += 1;
+  }
 
   // 2. The repository, the newest run, its jobs, and the runners of the scope.
   const repository = await send(plain, "repository", "GET", repo);
@@ -512,6 +533,7 @@ export async function probeGitHub(settings: ProbeSettings, ports: ProbePorts): P
     scopes,
     steps,
     conditional: measure,
+    rounds,
     runner,
     groups,
     group,

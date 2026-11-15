@@ -9,7 +9,7 @@ import { redactSecrets } from "@mark1russell7/text/redact";
 import { httpTransport } from "@procedures/gh";
 import { USER_AGENT, type CliIo } from "./cli.ts";
 import { GITHUB_API_URL, isGitHubToken, SECRET_VARIABLES } from "./program.ts";
-import { PROBE_LABEL, PROBE_TRIES, PROBE_TRIES_MAX, PROBE_TRIES_MIN, probeGitHub, settingsProblems, type ProbePorts, type ProbeSettings } from "./probe.ts";
+import { PROBE_LABEL, PROBE_ROUNDS, PROBE_TRIES, PROBE_TRIES_MAX, PROBE_TRIES_MIN, probeGitHub, settingsProblems, type ProbePorts, type ProbeSettings } from "./probe.ts";
 
 /** This text tells how to use the command. */
 export const PROBE_USAGE: string = [
@@ -22,7 +22,8 @@ export const PROBE_USAGE: string = [
   "  --group         Make a runner group in the organization for the runner, and remove it after",
   "  -h, --help      This text",
   "",
-  `The token comes from the variable ${SECRET_VARIABLES.github}. Use a token that no other client uses during the probe.`,
+  `The token comes from the variable ${SECRET_VARIABLES.github}. Each other client of its user adds noise to the measure of an answer 304.`,
+  `The probe repeats a round with noise, at most ${PROBE_ROUNDS} times.`,
   "The probe makes one runner and removes it at once. The record goes to stdout as JSON. No output has the token.",
   "Exit codes: 0 a record, 1 a problem or a runner or group that stays on GitHub, 2 a bad command.",
 ].join("\n");
