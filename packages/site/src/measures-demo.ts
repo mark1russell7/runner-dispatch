@@ -2,7 +2,7 @@
  * The logic of the demo of the measures. Each function has no effect, so the tests run it in Node.js.
  *
  * The demo makes a sample of jobs with known times. It makes the record `job-measure/1` of each job, as the reads of a
- * dispatcher see it, and it gives the records to `summarizeMeasures` of the package. Only the demo knows the true
+ * dispatcher see it. Then it gives the records to `summarizeMeasures` of the package. Only the demo knows the true
  * times, so the page can show that each pair of bounds holds the true quantile.
  */
 import { mulberry32, normalQuantile, seedOf, type Source } from "@mark1russell7/rigor-generators";
@@ -189,7 +189,8 @@ export function viewOf(jobs: readonly SampleJob[], span: SpanName, levels: reado
 }
 
 /**
- * This function gives the ticks of an axis from 0 to `max`: steps of 1, 2 or 5 times a power of 10, at most `count` steps.
+ * This function gives the ticks of an axis from 0 to `max`. Each step is 1, 2 or 5 times a power of 10.
+ * The axis has at most `count` steps.
  *
  * @param max - The end of the axis, more than 0
  * @param count - The largest count of steps
