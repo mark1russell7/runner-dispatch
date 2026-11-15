@@ -15,7 +15,7 @@ import {
 } from "./github.ts";
 import type { MachineTimes } from "./lifecycle.ts";
 import { decide, type TrustRules } from "./policy.ts";
-import type { JobSource, RepositoryView } from "./ports.ts";
+import type { JobSource, RepositoryView, ViewAnswer } from "./ports.ts";
 import type { RunKey, RunRecord } from "./records.ts";
 import type { DispatchSettings } from "./settings.ts";
 import { countingSuffix, fakeGitHubApi, fakeWorld, type FakeWorld, type WorldTimes } from "./testing.ts";
@@ -470,6 +470,69 @@ describe("createGitHubSource: the runners of an organization", () => {
   });
 });
 
+describe("createGitHubSource: the views of one pass", () => {
+  const RUNNER = { id: 9, name: "rd-100-1-00000000", status: "online", busy: true };
+  /** This function makes a client for the organization octo. The function `answer` gives the answer of a path first, or `null`. */
+  const pass = (answer: (request: GitHubRequest) => GitHubAnswer | null = () => null): Scripted =>
+    scripted((request) => {
+      const given = answer(request);
+      if (given !== null) return given;
+      if (/^\/repos\/octo\/(app|lib)\/actions\/runs$/.test(request.path)) return ok({ total_count: 0, workflow_runs: [] });
+      if (request.path === "/orgs/octo/actions/runners" || /^\/repos\/octo\/(app|lib)\/actions\/runners$/.test(request.path)) {
+        return ok({ total_count: 1, runners: [RUNNER] });
+      }
+      return { status: 404, body: { message: "Not Found" } };
+    });
+  const views = (source: JobSource, names: readonly string[]): Promise<readonly ViewAnswer[]> =>
+    (source.views as NonNullable<JobSource["views"]>)(names.map((name) => ({ repository: name, runs: [] })), signal);
+  const runner = { runnerId: 9, name: RUNNER.name, online: true, busy: true };
+
+  it("lists the runners of an organization one time, after the runs of each repository, and each view shows the one list", async () => {
+    const at = pass();
+    const answers = await views(createGitHubSource({ api: at.api, organization: "octo" }), [REPO, OTHER]);
+    const view = { runs: [], runners: [runner], scope: "organization:octo" };
+    expect(answers).toEqual([{ ok: true, view }, { ok: true, view }]);
+    expect(at.requests.map((request) => request.path).sort()).toEqual(
+      [...OPEN_RUN_STATUSES.map(() => `/repos/${REPO}/actions/runs`), ...OPEN_RUN_STATUSES.map(() => `/repos/${OTHER}/actions/runs`), "/orgs/octo/actions/runners"].sort(),
+    );
+    expect(at.requests.at(-1)?.path).toBe("/orgs/octo/actions/runners");
+  });
+
+  it("lists the runners of each repository without an organization", async () => {
+    const at = pass();
+    const answers = await views(createGitHubSource({ api: at.api }), [REPO, OTHER]);
+    expect(answers).toEqual([{ ok: true, view: { runs: [], runners: [runner] } }, { ok: true, view: { runs: [], runners: [runner] } }]);
+    expect(at.requests.filter((request) => request.path.endsWith("/runners")).map((request) => request.path)).toEqual([
+      `/repos/${REPO}/actions/runners`,
+      `/repos/${OTHER}/actions/runners`,
+    ]);
+  });
+
+  it("gives the error of the runs of one repository only to its view, and lists the runners for the others", async () => {
+    const at = pass((request) => (request.path === `/repos/${OTHER}/actions/runs` ? { status: 500, body: null } : null));
+    const answers = await views(createGitHubSource({ api: at.api, organization: "octo" }), [REPO, OTHER, "evil/app"]);
+    expect(answers[0]).toEqual({ ok: true, view: { runs: [], runners: [runner], scope: "organization:octo" } });
+    expect(answers[1]).toEqual({ ok: false, error: new Error(`GitHub answered the list /repos/${OTHER}/actions/runs with the status 500.`) });
+    expect(answers[2]).toEqual({ ok: false, error: new RangeError('The repository "evil/app" is not a repository of the organization "octo".') });
+    expect(at.requests.filter((request) => request.path === "/orgs/octo/actions/runners")).toHaveLength(1);
+    expect(at.requests.some((request) => request.path.startsWith("/repos/evil/"))).toBe(false);
+  });
+
+  it("gives the error of a list of the runners to each view of its scope, and does not throw", async () => {
+    const at = pass((request) => (request.path === "/orgs/octo/actions/runners" ? { status: 502, body: null } : null));
+    const answers = await views(createGitHubSource({ api: at.api, organization: "octo" }), [REPO, OTHER]);
+    const error = new Error("GitHub answered the list /orgs/octo/actions/runners with the status 502.");
+    expect(answers).toEqual([{ ok: false, error }, { ok: false, error }]);
+    await expect(createGitHubSource({ api: at.api, organization: "octo" }).view(REPO, [], signal)).rejects.toThrow(error);
+  });
+
+  it("gives no answer and no request for no repository", async () => {
+    const at = pass();
+    expect(await views(createGitHubSource({ api: at.api, organization: "octo" }), [])).toEqual([]);
+    expect(at.requests).toEqual([]);
+  });
+});
+
 describe("the check of a runner group", () => {
   const group = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
     id: 3,
@@ -729,7 +792,17 @@ describe("the GitHub source on a fake world: each scenario", () => {
             if (view.runners.some((runner) => runner.busy)) seen.busy += 1;
             if (view.runners.some((runner) => !runner.online)) seen.offline += 1;
           }
+          // The views of one pass agree with the fake source too, and the views of one scope show one list.
+          const batch = await (source.views as NonNullable<JobSource["views"]>)([REPO, OTHER, "Octo/App"].map((name) => ({ repository: name, runs: named })), signal);
+          for (const [index, name] of [REPO, OTHER, "Octo/App"].entries()) {
+            const answer = batch[index];
+            if (answer?.ok !== true) throw new Error("The views of the GitHub source gave an error on the fake world.");
+            expect(sorted(answer.view)).toEqual(sorted(await world.source.view(name, named, signal)));
+          }
+          const before = fake.requests().length;
           await dispatcher.pass(signal);
+          const lists = fake.requests().slice(before).filter((request) => request.method === "GET" && request.path.endsWith("/actions/runners") && request.query["page"] === "1");
+          expect(lists.length).toBe(given.organization ? 1 : RULES.repositories.length);
           await clock.advance(given.period);
           const done = runs.every((run, index) =>
             run.jobs.every((job, place) => !served(run, job.own) || world.jobs().filter((each) => each.runId === 100 + index)[place]?.status === "completed"),

@@ -89,7 +89,9 @@ type StopSignal: build/ports.chunk.d.ts#StopSignal
 TRUST_RULES_FORMAT: build/ports.chunk.d.ts#TRUST_RULES_FORMAT
 type TrustRules: build/ports.chunk.d.ts#TrustRules
 type TrustRulesResult: build/ports.chunk.d.ts#TrustRulesResult
+type ViewAnswer: build/ports.chunk.d.ts#ViewAnswer
 type ViewRead: build/index.d.ts#ViewRead
+type ViewRequest: build/ports.chunk.d.ts#ViewRequest
 type WaitReason: build/index.d.ts#WaitReason
 advance: build/index.d.ts#advance
 checkJob: build/ports.chunk.d.ts#checkJob
@@ -739,6 +741,7 @@ interface JobRecord {
 ### build/ports.chunk.d.ts#JobSource
 interface JobSource<Signal extends StopSignal = StopSignal> {
   view(repository: string, runs: readonly RunKey[], signal: Signal): Promise<RepositoryView>;
+  views?(requests: readonly ViewRequest[], signal: Signal): Promise<readonly ViewAnswer[]>;
   register(request: RunnerRequest, signal: Signal): Promise<RunnerRegistration>;
   remove(repository: string, runnerId: number, signal: Signal): Promise<void>;
 }
@@ -877,6 +880,21 @@ type TrustRulesResult = {
   readonly ok: false;
   readonly problems: readonly string[];
 };
+
+### build/ports.chunk.d.ts#ViewAnswer
+type ViewAnswer = {
+  readonly ok: true;
+  readonly view: RepositoryView;
+} | {
+  readonly ok: false;
+  readonly error: unknown;
+};
+
+### build/ports.chunk.d.ts#ViewRequest
+interface ViewRequest {
+  readonly repository: string;
+  readonly runs: readonly RunKey[];
+}
 
 ### build/ports.chunk.d.ts#checkJob
 declare function checkJob(settings: CheckSettings, environment: JobEnvironment, event: unknown): JobCheck;
