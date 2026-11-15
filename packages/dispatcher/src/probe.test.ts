@@ -9,6 +9,7 @@ import {
   parsePermissions,
   PROBE_LABEL,
   PROBE_ROUNDS,
+  PROBE_TOKEN_REFUSED,
   PROBE_TRIES_MAX,
   PROBE_TRIES_MIN,
   probeGitHub,
@@ -329,6 +330,17 @@ describe("settingsProblems", () => {
 });
 
 describe("probeGitHub", () => {
+  it("stops at the first answer 401, before it makes a runner or a group", async () => {
+    const github = fakeGitHub();
+    const clock = fakeClock(0);
+    // The catch comes first: drive attaches no handler while it moves the clock.
+    const work = probeGitHub(ORGANIZATION, portsOf(github.transport, clock, { token: "github_pat_not_the_token" })).catch((error: unknown) => error);
+    const error = await drive(clock, work);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(PROBE_TOKEN_REFUSED);
+    expect(github.sent.map((exchange) => `${exchange.method} ${new URL(exchange.url).pathname}`)).toEqual(["GET /rate_limit"]);
+  });
+
   it("measures the requests of a repository, makes a one-job runner and removes it", async () => {
     const { github, record } = await probe(REPOSITORY);
     expect(stepsOf(record)).toEqual([
@@ -615,6 +627,19 @@ describe("probeMain", () => {
     const code = await drive(clock, probeMain(["--repository", "octo/app", "--token-stdin"], at.io, { transport: github.transport, clock }));
     expect(code).toBe(0);
     expect(JSON.parse(at.out.join("\n"))).toMatchObject({ token: "fine-grained" });
+  });
+
+  it("exits with 1 and writes no record when GitHub refuses the token", async () => {
+    const github = fakeGitHub();
+    const clock = fakeClock(0);
+    const wrong = "github_pat_not_the_token";
+    const at = io({}, `${wrong}\n`);
+    const code = await drive(clock, probeMain(["--repository", "octo/app", "--token-stdin", "--out", "probe.json"], at.io, { transport: github.transport, clock }));
+    expect(code).toBe(1);
+    expect(at.err).toEqual([PROBE_TOKEN_REFUSED]);
+    expect(at.out).toEqual([]);
+    expect(at.files.size).toBe(0);
+    expect(github.sent).toHaveLength(1);
   });
 
   it("refuses an empty stdin, a text that is not a token, and a stdin that it cannot read, with no token in the output", async () => {
