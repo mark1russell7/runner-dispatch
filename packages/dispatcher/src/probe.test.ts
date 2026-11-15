@@ -491,7 +491,11 @@ describe("parseProbeCommand", () => {
     [["--repository", "octo/app", "--organization", "octo", "--group", "--tries", "2"], { ...ORGANIZATION, tries: 2 }],
     [["--label", "a", "--repository", "octo/app", "--label", "b"], { ...REPOSITORY, labels: ["a", "b"], tries: 5 }],
   ])("reads %j", (args, settings) => {
-    expect(parseProbeCommand(args)).toEqual({ kind: "probe", settings });
+    expect(parseProbeCommand(args)).toEqual({ kind: "probe", settings, tokenStdin: false, out: null });
+  });
+
+  it("reads the token option and the file of the record", () => {
+    expect(parseProbeCommand(["--token-stdin", "--repository", "octo/app", "--out", "probe.json"])).toEqual({ kind: "probe", settings: { ...REPOSITORY, tries: 5 }, tokenStdin: true, out: "probe.json" });
   });
 
   it.each([
@@ -500,6 +504,10 @@ describe("parseProbeCommand", () => {
     [["--repository", "--group"], "The option --repository has no value."],
     [["--repository", "octo/app", "--repository", "octo/b"], "The option --repository is in the command two times."],
     [["--repository", "octo/app", "--group", "--group"], "The option --group is in the command two times."],
+    [["--repository", "octo/app", "--token-stdin", "--token-stdin"], "The option --token-stdin is in the command two times."],
+    [["--repository", "octo/app", "--out", "a.json", "--out", "b.json"], "The option --out is in the command two times."],
+    [["--repository", "octo/app", "--out"], "The option --out has no value."],
+    [["--repository", "octo/app", "--", "organization", "octo"], "The option -- is not an option of the command."],
     [["--repository", "octo/app", "--bad"], "The option --bad is not an option of the command."],
     [["octo/app"], "The argument octo/app has no option."],
     [["--repository", "octo/app", "--tries", "x"], `The count of the conditional requests is not a whole number from ${PROBE_TRIES_MIN} to ${PROBE_TRIES_MAX}.`],
@@ -514,10 +522,26 @@ describe("parseProbeCommand", () => {
 });
 
 describe("probeMain", () => {
-  const io = (env: Readonly<Record<string, string | undefined>>) => {
+  const io = (env: Readonly<Record<string, string | undefined>>, stdin: string | Error = "", write: Error | null = null) => {
     const out: string[] = [];
     const err: string[] = [];
-    return { io: { env, out: (line: string) => out.push(line), err: (line: string) => err.push(line) }, out, err };
+    const files = new Map<string, string>();
+    return {
+      io: {
+        env,
+        out: (line: string) => out.push(line),
+        err: (line: string) => err.push(line),
+        readStdin: () => (stdin instanceof Error ? Promise.reject(stdin) : Promise.resolve(stdin)),
+        writeText: (path: string, text: string) => {
+          if (write !== null) return Promise.reject(write);
+          files.set(path, text);
+          return Promise.resolve();
+        },
+      },
+      out,
+      err,
+      files,
+    };
   };
   const ENV = { [SECRET_VARIABLES.github]: TOKEN };
 
@@ -551,7 +575,7 @@ describe("probeMain", () => {
     expect(bad.err).toEqual(["The command has no option --repository.", PROBE_USAGE]);
     const none = io({});
     expect(await probeMain(["--repository", "octo/app"], none.io)).toBe(1);
-    expect(none.err).toEqual([`The variable ${SECRET_VARIABLES.github} is not set.`]);
+    expect(none.err).toEqual([`The variable ${SECRET_VARIABLES.github} is not set. Set it, or give the token on stdin with --token-stdin.`]);
     const space = io({ [SECRET_VARIABLES.github]: "a b" });
     expect(await probeMain(["--repository", "octo/app"], space.io)).toBe(1);
     expect(space.err).toEqual([`The variable ${SECRET_VARIABLES.github} is not a token: it has a space, a line break or a character that is not ASCII.`]);
@@ -567,5 +591,52 @@ describe("probeMain", () => {
     expect(record.steps.every((step) => step.status === null && step.problem !== null && step.problem.includes("The transport failed"))).toBe(true);
     expect(record.runner).toEqual({ made: false, labels: [], removed: true });
     expect(at.out.join("\n")).not.toContain(TOKEN);
+  });
+
+  it("reads the token from stdin, and writes the record to the file of --out", async () => {
+    const github = fakeGitHub();
+    const clock = fakeClock(0);
+    // The clipboard of a shell often adds a line break.
+    const at = io({}, `${TOKEN}\r\n`);
+    const code = await drive(clock, probeMain(["--repository", "octo/app", "--tries", "2", "--token-stdin", "--out", "probe.json"], at.io, { transport: github.transport, clock }));
+    expect(code).toBe(0);
+    expect(at.err).toEqual([]);
+    expect(at.out).toEqual(["The record is in probe.json."]);
+    const text = at.files.get("probe.json") ?? "";
+    expect(text.endsWith("}\n")).toBe(true);
+    expect(JSON.parse(text)).toMatchObject({ format: "github-probe/1", repository: "octo/app", token: "fine-grained", clean: true });
+    expect(text).not.toContain(TOKEN);
+  });
+
+  it("takes the token of stdin before the token of the variable", async () => {
+    const github = fakeGitHub();
+    const clock = fakeClock(0);
+    const at = io({ [SECRET_VARIABLES.github]: "ghp_not_this_token" }, TOKEN);
+    const code = await drive(clock, probeMain(["--repository", "octo/app", "--token-stdin"], at.io, { transport: github.transport, clock }));
+    expect(code).toBe(0);
+    expect(JSON.parse(at.out.join("\n"))).toMatchObject({ token: "fine-grained" });
+  });
+
+  it("refuses an empty stdin, a text that is not a token, and a stdin that it cannot read, with no token in the output", async () => {
+    const empty = io({}, " \n");
+    expect(await probeMain(["--repository", "octo/app", "--token-stdin"], empty.io)).toBe(1);
+    expect(empty.err).toEqual(["The option --token-stdin needs the token on stdin, but stdin is empty."]);
+    const two = io({}, `${TOKEN}\n${TOKEN}\n`);
+    expect(await probeMain(["--repository", "octo/app", "--token-stdin"], two.io)).toBe(1);
+    expect(two.err).toEqual(["The text on stdin is not a token: it has a space, a line break or a character that is not ASCII."]);
+    const terminal = io({}, new Error("stdin is a terminal."));
+    expect(await probeMain(["--repository", "octo/app", "--token-stdin"], terminal.io)).toBe(1);
+    expect(terminal.err).toEqual(["The command cannot read stdin: stdin is a terminal."]);
+    for (const each of [empty, two, terminal]) expect([...each.out, ...each.err].join("\n")).not.toContain(TOKEN);
+  });
+
+  it("writes the record to stdout and exits with 1 when it cannot write the file", async () => {
+    const github = fakeGitHub();
+    const clock = fakeClock(0);
+    const at = io(ENV, "", new Error("The folder does not exist."));
+    const code = await drive(clock, probeMain(["--repository", "octo/app", "--tries", "2", "--out", "missing/probe.json"], at.io, { transport: github.transport, clock }));
+    expect(code).toBe(1);
+    expect(at.err).toEqual(["The command cannot write the file missing/probe.json: The folder does not exist."]);
+    expect(JSON.parse(at.out.join("\n"))).toMatchObject({ format: "github-probe/1", clean: true });
   });
 });
