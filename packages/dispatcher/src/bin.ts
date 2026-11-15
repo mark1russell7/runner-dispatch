@@ -4,5 +4,6 @@
  * After a run, the service ends the process. After a check or a problem, the exit code of `main` ends it.
  */
 import { main, nodeIo } from "./cli.ts";
+import { holdWhile } from "./hold.ts";
 
-process.exitCode = await main(process.argv.slice(2), nodeIo());
+process.exitCode = await holdWhile(() => main(process.argv.slice(2), nodeIo()));
