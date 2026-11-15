@@ -18,7 +18,7 @@ const github = fakeGitHub();
 const lines: string[] = [];
 const run = (): Promise<number> =>
   probeMain(
-    ["--repository", "octo/app", "--organization", "octo", "--group", "--tries", "1"],
+    ["--repository", "octo/app", "--organization", "octo", "--group"],
     {
       env: { [SECRET_VARIABLES.github]: TOKEN },
       out: (line) => lines.push(line),

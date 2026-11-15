@@ -24,6 +24,34 @@ export interface FakeOptions {
   readonly before?: (method: string, path: string) => void;
 }
 
+/** This record is a runner group of the fake. */
+export interface FakeGroup {
+  id: number;
+  name: string;
+  visibility: string;
+  default: boolean;
+  allows_public_repositories: boolean;
+  repositories: number[];
+}
+
+/** This record is a runner of the fake. */
+export interface FakeRunner {
+  id: number;
+  name: string;
+  labels: string[];
+  group: number;
+  scope: string;
+}
+
+/** This record is a fake GitHub: its transport, the requests that it got, its runners, its groups and its count of used requests. */
+export interface FakeGitHub {
+  readonly transport: RestTransport;
+  readonly sent: RestExchange[];
+  readonly runners: Map<number, FakeRunner>;
+  readonly groups: Map<number, FakeGroup>;
+  used(): number;
+}
+
 /** This function gives the permissions header of a route of the fake. The names are the names of a test. */
 const permissionsOf = (method: string, path: string): string => {
   if (path === "/repos/octo/app") return "metadata=read";
@@ -33,16 +61,16 @@ const permissionsOf = (method: string, path: string): string => {
 };
 
 /** This function makes a fake REST API of GitHub at the level of a transport, with the counts of the primary limit. */
-export const fakeGitHub = (options: FakeOptions = {}) => {
+export const fakeGitHub = (options: FakeOptions = {}): FakeGitHub => {
   let used = 40;
   let index = 0;
   let nextRunner = 50;
   let nextGroup = 10;
   const sent: RestExchange[] = [];
-  const groups = new Map<number, { id: number; name: string; visibility: string; default: boolean; allows_public_repositories: boolean; repositories: number[] }>([
+  const groups = new Map<number, FakeGroup>([
     [1, { id: 1, name: "Default", visibility: "all", default: true, allows_public_repositories: false, repositories: [] }],
   ]);
-  const runners = new Map<number, { id: number; name: string; labels: string[]; group: number; scope: string }>();
+  const runners = new Map<number, FakeRunner>();
   const reply = (status: number, body: unknown, method: string, path: string, extra: Record<string, string> = {}): RestReply => ({
     status,
     headers: {
