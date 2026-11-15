@@ -66,7 +66,14 @@ export interface LogRecords {
   readonly repeated: number;
 }
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+/** This type has the two fields of a log line that the command reads. */
+interface LineFields {
+  readonly event?: unknown;
+  readonly record?: unknown;
+}
+
+const lineFields = (value: unknown): LineFields | null =>
+  typeof value === "object" && value !== null && !Array.isArray(value) ? (value as LineFields) : null;
 
 /**
  * This function takes the records of the measures from the texts of logs. It is a function with no effect.
@@ -92,9 +99,10 @@ export function recordsOfLogs(texts: readonly string[]): LogRecords {
         bad += 1;
         continue;
       }
-      if (!isObject(value) || (value.event !== "machine-measure" && value.event !== "job-measure")) continue;
-      const record = value.record;
-      if (value.event === "machine-measure") {
+      const fields = lineFields(value);
+      if (fields === null || (fields.event !== "machine-measure" && fields.event !== "job-measure")) continue;
+      const record = fields.record;
+      if (fields.event === "machine-measure") {
         if (!isMachineMeasure(record)) bad += 1;
         else if (machines.has(record.machine)) repeated += 1;
         else machines.set(record.machine, record);

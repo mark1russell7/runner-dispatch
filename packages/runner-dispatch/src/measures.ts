@@ -394,6 +394,11 @@ const isTime = (value: unknown): value is number => typeof value === "number" &&
 
 const isText = (value: unknown): value is string | null => value === null || typeof value === "string";
 
+/** This type has the fields of the type `T`, each with an unknown value. A guard reads the fields of a value through it. */
+type Fields<T> = { readonly [K in keyof T]?: unknown };
+
+const fieldsOf = <T>(value: unknown): Fields<T> | null => (isObject(value) ? (value as Fields<T>) : null);
+
 /**
  * This function tells if a value is a moment: a finite time `at`, and an earliest time `after` that is `null` or not later.
  *
@@ -401,7 +406,10 @@ const isText = (value: unknown): value is string | null => value === null || typ
  * @returns `true` when the value is a moment
  */
 export function isMoment(value: unknown): value is Moment {
-  return isObject(value) && isTime(value.at) && (value.after === null || (isTime(value.after) && value.after <= value.at));
+  const moment = fieldsOf<Moment>(value);
+  if (moment === null) return false;
+  const { at, after } = moment;
+  return isTime(at) && (after === null || (isTime(after) && after <= at));
 }
 
 const isMomentOrNull = (value: unknown): boolean => value === null || isMoment(value);
@@ -414,12 +422,13 @@ const isMomentOrNull = (value: unknown): boolean => value === null || isMoment(v
  * @returns `true` when the value is such a record
  */
 export function isMachineMeasure(value: unknown): value is MachineMeasure {
-  if (!isObject(value) || value.format !== MACHINE_MEASURE_FORMAT || typeof value.machine !== "string" || !isText(value.size)) return false;
-  const run = value.run;
-  if (!isObject(run) || !isRepositoryName(run.repository) || !isId(run.runId) || !isId(run.runAttempt)) return false;
-  if (value.asked !== null && !isTime(value.asked)) return false;
-  if (value.end !== null && !(MACHINE_EVENTS as readonly unknown[]).includes(value.end)) return false;
-  return [value.made, value.registered, value.started, value.ended, value.destroyed].every(isMomentOrNull);
+  const record = fieldsOf<MachineMeasure>(value);
+  if (record === null || record.format !== MACHINE_MEASURE_FORMAT || typeof record.machine !== "string" || !isText(record.size)) return false;
+  const run = fieldsOf<MachineMeasure["run"]>(record.run);
+  if (run === null || !isRepositoryName(run.repository) || !isId(run.runId) || !isId(run.runAttempt)) return false;
+  if (record.asked !== null && !isTime(record.asked)) return false;
+  if (record.end !== null && !(MACHINE_EVENTS as readonly unknown[]).includes(record.end)) return false;
+  return [record.made, record.registered, record.started, record.ended, record.destroyed].every(isMomentOrNull);
 }
 
 /**
@@ -430,7 +439,8 @@ export function isMachineMeasure(value: unknown): value is MachineMeasure {
  * @returns `true` when the value is such a record
  */
 export function isJobMeasure(value: unknown): value is JobMeasure {
-  if (!isObject(value) || value.format !== JOB_MEASURE_FORMAT || !isRepositoryName(value.repository) || !isText(value.runner)) return false;
-  if (!isId(value.runId) || !isId(value.runAttempt) || !isId(value.jobId) || !JOB_STATUSES.includes(value.last)) return false;
-  return isMoment(value.queued) && isMomentOrNull(value.started) && isMomentOrNull(value.completed);
+  const record = fieldsOf<JobMeasure>(value);
+  if (record === null || record.format !== JOB_MEASURE_FORMAT || !isRepositoryName(record.repository) || !isText(record.runner)) return false;
+  if (!isId(record.runId) || !isId(record.runAttempt) || !isId(record.jobId) || !JOB_STATUSES.includes(record.last)) return false;
+  return isMoment(record.queued) && isMomentOrNull(record.started) && isMomentOrNull(record.completed);
 }
