@@ -461,7 +461,7 @@ describe("probeGitHub", () => {
   });
 
   it("records a refusal of each request with its status and its permissions", async () => {
-    const { record } = await probe(REPOSITORY, { refuse: (method, path) => (path.includes("/actions/runs") ? 403 : null) });
+    const { record } = await probe(REPOSITORY, { refuse: (_method, path) => (path.includes("/actions/runs") ? 403 : null) });
     for (const step of record.steps.filter((each) => each.path.includes("/actions/runs"))) {
       expect(step).toMatchObject({ status: 403, permissions: "actions=read", problem: null });
     }

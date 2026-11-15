@@ -172,7 +172,7 @@ The measure of an answer 304 needs a token that no other client uses during the 
 - Each conditional request must add the same count, and the last read must be equal to the last conditional request.
 - Else the measure has no read. Requests of another client in one gap of the sequence give no read, and not a wrong cost.
 
-The docs of GitHub do not fix the format of the header of the permissions. Thus the record keeps the text of the header, and also its sets: a semicolon separates two sets, and a comma separates two permissions of one set.
+The docs of GitHub do not fix the format of the header of the permissions. Thus the record keeps the text of the header, and also its sets. A semicolon separates two sets, and a comma separates two permissions of one set.
 
 ## The tests
 

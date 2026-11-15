@@ -105,7 +105,8 @@ function repositoryPath(repository: string): string {
 const ORGANIZATION = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 
 /**
- * This function tells if a value is the name of an organization of GitHub: 1 to 39 letters, digits and hyphens, with no hyphen at an end.
+ * This function tells if a value is the name of an organization of GitHub.
+ * A name has 1 to 39 letters, digits and hyphens, with no hyphen at an end.
  *
  * @param value - The value
  * @returns `true` for the name of an organization

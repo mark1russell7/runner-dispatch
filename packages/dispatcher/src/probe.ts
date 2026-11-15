@@ -247,8 +247,8 @@ export function headerOf(reply: RestReply, name: string): string | null {
 
 /**
  * This function calculates the cost of an answer 304 from the counts of the used requests. It has no effect.
- * The sequence is a read of the rate, a second read of the rate, the first request of the list, each conditional
- * request, and a last read of the rate. A read of the rate costs nothing.
+ * The sequence starts with two reads of the rate and the first request of the list. Then come the conditional
+ * requests and a last read of the rate. A read of the rate costs nothing.
  *
  * - With no other client, the two first reads are equal, and the first request adds 1.
  * - Each conditional request adds the same count, and the last read is equal to the last conditional request.
