@@ -19,6 +19,7 @@ import {
   type RunFields,
   type Sim,
 } from "./demo.ts";
+import { mountMeasures } from "./measures-view.ts";
 
 setupTheme(byId<HTMLButtonElement>("theme"), "theme");
 
@@ -315,3 +316,7 @@ waitButton.addEventListener("click", () => {
 });
 byId("restart").addEventListener("click", restart);
 renderLife();
+
+// The demo of the measures.
+
+mountMeasures();

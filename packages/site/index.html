@@ -92,6 +92,49 @@
     <p id="longest"></p>
   </section>
 
+  <section aria-labelledby="measures-title">
+    <h2 id="measures-title">How long the jobs wait</h2>
+    <p>The dispatcher sees a job start only when it reads the queue. Thus each time of a job has two bounds. <code>summarizeMeasures</code> gives the bounds of each quantile of many jobs, and each pair of bounds holds the true quantile.</p>
+    <p class="note sample-note"><strong>A sample, not real data.</strong> This page makes the jobs and their true times from a model. Only the demo knows the true times. The dispatcher knows only the bounds.</p>
+    <div class="panel measure-controls">
+      <div id="span-choice" class="span-choice" role="group" aria-label="The time to show"></div>
+      <label class="control" for="pass">Time between two reads: <output id="pass-out" for="pass"></output>
+        <input id="pass" type="range" min="5" max="120" step="5">
+      </label>
+      <label class="control" for="job-count">Jobs
+        <select id="job-count">
+          <option value="50">50</option>
+          <option value="200">200</option>
+          <option value="1000">1000</option>
+        </select>
+      </label>
+      <button id="resample" type="button">New sample</button>
+    </div>
+    <p id="measure-text" class="measure-text" role="status"></p>
+    <figure class="chart-box">
+      <div id="chart" class="chart"></div>
+      <div id="chart-tip" class="tip" hidden></div>
+      <figcaption class="legend">
+        <span><span class="swatch band" aria-hidden="true"></span>The bounds from the reads</span>
+        <span><span class="swatch truth" aria-hidden="true"></span>The true times</span>
+        <span><span class="swatch dot" aria-hidden="true"></span>The true quantile</span>
+      </figcaption>
+    </figure>
+    <p class="note">Each curve gives the share of the jobs at or below each time. Point at the chart to read the bounds of each level.</p>
+    <div class="table-box">
+      <table class="levels-table">
+        <caption>Low and high are the bounds of each quantile from the reads. True is the quantile of the true times, which only the sample knows.</caption>
+        <thead><tr><th scope="col">Level</th><th scope="col">Low</th><th scope="col">High</th><th scope="col">True</th><th scope="col">Held</th></tr></thead>
+        <tbody id="levels-body"></tbody>
+      </table>
+    </div>
+    <details class="panel">
+      <summary>The summary <code>measure-summary/1</code></summary>
+      <p class="note">The command <code>runner-dispatch-measures</code> writes this record from the logs of the dispatcher. Each time is in milliseconds.</p>
+      <pre id="summary-json" class="summary-json"></pre>
+    </details>
+  </section>
+
   <h2>Install</h2>
   <div class="command">
     <code id="install">pnpm add @mark1russell7/runner-dispatch</code>

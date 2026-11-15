@@ -13,6 +13,8 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@mark1russell7/rigor-generators": "^0.1.16",
+    "@mark1russell7/rigor-statistics": "^0.2.1",
     "@mark1russell7/runner-dispatch": "workspace:*"
   },
   "devDependencies": {

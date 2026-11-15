@@ -276,6 +276,12 @@ importers:
 
   packages/site:
     dependencies:
+      '@mark1russell7/rigor-generators':
+        specifier: ^0.1.16
+        version: 0.1.16
+      '@mark1russell7/rigor-statistics':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@mark1russell7/runner-dispatch':
         specifier: workspace:*
         version: link:../runner-dispatch
