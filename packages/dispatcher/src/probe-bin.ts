@@ -6,6 +6,7 @@
 import { writeFile } from "node:fs/promises";
 import { text } from "node:stream/consumers";
 import { nodeIo } from "./cli.ts";
+import { holdWhile } from "./hold.ts";
 import { probeMain } from "./probe-cli.ts";
 
 /** This function reads all of stdin. A terminal on stdin is a mistake: the token comes through a pipe or a file. */
@@ -16,8 +17,10 @@ const readStdin = async (): Promise<string> => {
 
 const controller = new AbortController();
 process.once("SIGINT", () => controller.abort());
-process.exitCode = await probeMain(
-  process.argv.slice(2),
-  { ...nodeIo(), readStdin, writeText: (path, content) => writeFile(path, content, "utf8") },
-  { signal: controller.signal },
+process.exitCode = await holdWhile(() =>
+  probeMain(
+    process.argv.slice(2),
+    { ...nodeIo(), readStdin, writeText: (path, content) => writeFile(path, content, "utf8") },
+    { signal: controller.signal },
+  ),
 );
