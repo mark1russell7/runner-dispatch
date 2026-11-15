@@ -182,8 +182,9 @@ Get-Clipboard | node src/probe-bin.ts --token-stdin --repository octo/app --out 
 ```
 
 ```sh
-# Git Bash: node.exe, because the alias node of Git Bash starts winpty, and winpty refuses a redirect of stdin or stdout
-node.exe src/probe-bin.ts --token-stdin --repository octo/app --out probe.json < /dev/clipboard
+# Git Bash: node.exe, because the alias node of Git Bash starts winpty, and winpty refuses a redirect of stdin or stdout.
+# cat reads the clipboard: a redirect of /dev/clipboard gives a program of Windows an empty stdin.
+cat /dev/clipboard | node.exe src/probe-bin.ts --token-stdin --repository octo/app --out probe.json
 ```
 
 - The probe makes one runner with the label `runner-dispatch-probe`, and removes it at once. No job names this label.
