@@ -17,7 +17,9 @@ describe("the entry", () => {
       "MACHINE_STATES",
       "MACHINE_TIMES_FORMAT",
       "MACHINE_TIME_MAX",
+      "MEASURE_SUMMARY_FORMAT",
       "OUTSIDE_INPUT_EVENTS",
+      "SUMMARY_LEVELS",
       "TRUST_RULES_FORMAT",
       "advance",
       "checkJob",
@@ -27,6 +29,9 @@ describe("the entry", () => {
       "due",
       "foldName",
       "isId",
+      "isJobMeasure",
+      "isMachineMeasure",
+      "isMoment",
       "isRepositoryName",
       "jobSpans",
       "jobStarted",
@@ -49,6 +54,8 @@ describe("the entry", () => {
       "sizeOfLabels",
       "spanOf",
       "startLife",
+      "summarizeMeasures",
+      "summarizeSpans",
       "waitOf",
     ]);
   });

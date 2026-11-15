@@ -1,5 +1,13 @@
 # Changes
 
+## 0.1.3
+
+- `summarizeMeasures` gives the summary `measure-summary/1` of the records of the machines and of the jobs.
+- The summary of a span has the bounds of each quantile at the nearest rank. Each pair of bounds holds the true quantile.
+- `summarizeSpans` gives the summary of one span. `SUMMARY_LEVELS` is the default levels: 0.5, 0.9 and 0.99.
+- `isMachineMeasure`, `isJobMeasure` and `isMoment` examine a record that comes from a log or from JSON.
+- The package depends on `@mark1russell7/rigor-statistics` for the quantiles.
+
 ## 0.1.2
 
 - The root entry exports `isRepositoryName`. The entry `github` exports `isOrganizationName`.

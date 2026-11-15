@@ -142,6 +142,21 @@ The command makes the ports of Node.js in `src/cli.ts`:
 - `fileExists` examines the stop file. An error that is not `ENOENT` makes the pass fail, and the stop switch does not change.
 - Each line of each output goes through `redactSecrets` of `@mark1russell7/text/redact` with the two tokens. Thus an error text from a library also has no token.
 
+## The summary of the measures
+
+The entry `src/measures-bin.ts` reads the logs of the program and writes the summary `measure-summary/1` of `summarizeMeasures`:
+
+```sh
+node src/bin.ts /etc/runner-dispatch/program.json > dispatch.log
+node src/measures-bin.ts dispatch.log --level 0.5 --level 0.95 > summary.json
+```
+
+- The command takes each line `machine-measure` and `job-measure` of each file. It does not use the lines of other events.
+- A line that is not JSON, or a record with a wrong field, does not go into the summary. The command tells their count on stderr.
+- A machine goes into the summary one time, and so does a job. Thus two logs of one program do not count a record two times.
+- The summary goes to stdout as JSON. The levels are 0.5, 0.9 and 0.99 when the command has no option `--level`.
+- The exit code 0 is a summary. The exit code 1 is a file that the command cannot read, and 2 is a bad command.
+
 ## The probe of a credential
 
 The entry `src/probe-bin.ts` sends the requests of the dispatcher to GitHub with one real token. It measures four facts:

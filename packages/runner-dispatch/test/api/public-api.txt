@@ -34,6 +34,7 @@ type JobSource: build/ports.chunk.d.ts#JobSource
 type JobSpans: build/index.d.ts#JobSpans
 type JobStartedResult: build/index.d.ts#JobStartedResult
 type JobStatus: build/ports.chunk.d.ts#JobStatus
+type JobSummary: build/index.d.ts#JobSummary
 type LifeStep: build/index.d.ts#LifeStep
 type LongestLife: build/index.d.ts#LongestLife
 MACHINE_ACTIONS: build/index.d.ts#MACHINE_ACTIONS
@@ -43,6 +44,7 @@ MACHINE_MEASURE_FORMAT: build/index.d.ts#MACHINE_MEASURE_FORMAT
 MACHINE_STATES: build/index.d.ts#MACHINE_STATES
 MACHINE_TIMES_FORMAT: build/index.d.ts#MACHINE_TIMES_FORMAT
 MACHINE_TIME_MAX: build/index.d.ts#MACHINE_TIME_MAX
+MEASURE_SUMMARY_FORMAT: build/index.d.ts#MEASURE_SUMMARY_FORMAT
 type MachineAction: build/index.d.ts#MachineAction
 type MachineAsk: build/index.d.ts#MachineAsk
 type MachineEvent: build/index.d.ts#MachineEvent
@@ -55,22 +57,27 @@ type MachineSpans: build/index.d.ts#MachineSpans
 type MachineState: build/index.d.ts#MachineState
 type MachineStatus: build/ports.chunk.d.ts#MachineStatus
 type MachineStep: build/index.d.ts#MachineStep
+type MachineSummary: build/index.d.ts#MachineSummary
 type MachineTimes: build/index.d.ts#MachineTimes
 type MachineTimesResult: build/index.d.ts#MachineTimesResult
 type MachineWait: build/index.d.ts#MachineWait
 type MeasureNote: build/index.d.ts#MeasureNote
+type MeasureRecords: build/index.d.ts#MeasureRecords
 type MeasureState: build/index.d.ts#MeasureState
+type MeasureSummary: build/index.d.ts#MeasureSummary
 type Moment: build/index.d.ts#Moment
 OUTSIDE_INPUT_EVENTS: build/ports.chunk.d.ts#OUTSIDE_INPUT_EVENTS
 type Observation: build/index.d.ts#Observation
 type PassFailure: build/index.d.ts#PassFailure
 type PassReport: build/index.d.ts#PassReport
 type PassRequest: build/index.d.ts#PassRequest
+type Period: build/index.d.ts#Period
 type Plan: build/index.d.ts#Plan
 type PlannedMake: build/index.d.ts#PlannedMake
 type PlannedRemoval: build/index.d.ts#PlannedRemoval
 type PlannedWait: build/index.d.ts#PlannedWait
 type ProviderMachine: build/ports.chunk.d.ts#ProviderMachine
+type QuantileBounds: build/index.d.ts#QuantileBounds
 type Refusal: build/ports.chunk.d.ts#Refusal
 type RefusalRule: build/ports.chunk.d.ts#RefusalRule
 type RepositoryObservation: build/index.d.ts#RepositoryObservation
@@ -81,11 +88,14 @@ type RunLabelParts: build/ports.chunk.d.ts#RunLabelParts
 type RunRecord: build/ports.chunk.d.ts#RunRecord
 type RunnerRegistration: build/ports.chunk.d.ts#RunnerRegistration
 type RunnerRequest: build/ports.chunk.d.ts#RunnerRequest
+SUMMARY_LEVELS: build/index.d.ts#SUMMARY_LEVELS
 type SourceJob: build/ports.chunk.d.ts#SourceJob
 type SourceRun: build/ports.chunk.d.ts#SourceRun
 type SourceRunner: build/ports.chunk.d.ts#SourceRunner
 type Span: build/index.d.ts#Span
+type SpanSummary: build/index.d.ts#SpanSummary
 type StopSignal: build/ports.chunk.d.ts#StopSignal
+type SummaryOptions: build/index.d.ts#SummaryOptions
 TRUST_RULES_FORMAT: build/ports.chunk.d.ts#TRUST_RULES_FORMAT
 type TrustRules: build/ports.chunk.d.ts#TrustRules
 type TrustRulesResult: build/ports.chunk.d.ts#TrustRulesResult
@@ -101,6 +111,9 @@ decide: build/ports.chunk.d.ts#decide
 due: build/index.d.ts#due
 foldName: build/ports.chunk.d.ts#foldName
 isId: build/ports.chunk.d.ts#isId
+isJobMeasure: build/index.d.ts#isJobMeasure
+isMachineMeasure: build/index.d.ts#isMachineMeasure
+isMoment: build/index.d.ts#isMoment
 isRepositoryName: build/ports.chunk.d.ts#isRepositoryName
 jobSpans: build/index.d.ts#jobSpans
 jobStarted: build/index.d.ts#jobStarted
@@ -123,6 +136,8 @@ sameRun: build/ports.chunk.d.ts#sameRun
 sizeOfLabels: build/index.d.ts#sizeOfLabels
 spanOf: build/index.d.ts#spanOf
 startLife: build/index.d.ts#startLife
+summarizeMeasures: build/index.d.ts#summarizeMeasures
+summarizeSpans: build/index.d.ts#summarizeSpans
 waitOf: build/index.d.ts#waitOf
 
 ## ./github (build/github.d.ts): names
@@ -387,6 +402,12 @@ interface JobStartedResult {
   readonly lines: readonly string[];
 }
 
+### build/index.d.ts#JobSummary
+interface JobSummary {
+  readonly queue: SpanSummary | null;
+  readonly run: SpanSummary | null;
+}
+
 ### build/index.d.ts#LifeStep
 interface LifeStep {
   readonly machine: string;
@@ -424,6 +445,9 @@ export declare const MACHINE_TIMES_FORMAT = "machine-times/1";
 
 ### build/index.d.ts#MACHINE_TIME_MAX
 export declare const MACHINE_TIME_MAX = 31536e3;
+
+### build/index.d.ts#MEASURE_SUMMARY_FORMAT
+export declare const MEASURE_SUMMARY_FORMAT = "measure-summary/1";
 
 ### build/index.d.ts#MachineAction
 type MachineAction = "provider.destroy";
@@ -479,6 +503,16 @@ interface MachineStep {
   readonly actions: readonly MachineAction[];
 }
 
+### build/index.d.ts#MachineSummary
+interface MachineSummary {
+  readonly start: SpanSummary | null;
+  readonly boot: SpanSummary | null;
+  readonly idle: SpanSummary | null;
+  readonly job: SpanSummary | null;
+  readonly teardown: SpanSummary | null;
+  readonly life: SpanSummary | null;
+}
+
 ### build/index.d.ts#MachineTimes
 interface MachineTimes {
   readonly make: number;
@@ -514,6 +548,12 @@ interface MeasureNote {
   readonly jobs: readonly JobMeasure[];
 }
 
+### build/index.d.ts#MeasureRecords
+interface MeasureRecords {
+  readonly machines: readonly MachineMeasure[];
+  readonly jobs: readonly JobMeasure[];
+}
+
 ### build/index.d.ts#MeasureState
 interface MeasureState {
   readonly listed: number | null;
@@ -522,6 +562,16 @@ interface MeasureState {
   readonly machines: readonly MachineMeasure[];
   readonly jobs: readonly JobMeasure[];
   readonly closed: readonly string[];
+}
+
+### build/index.d.ts#MeasureSummary
+interface MeasureSummary {
+  readonly format: typeof MEASURE_SUMMARY_FORMAT;
+  readonly machines: number;
+  readonly jobs: number;
+  readonly period: Period | null;
+  readonly machine: MachineSummary;
+  readonly job: JobSummary;
 }
 
 ### build/index.d.ts#Moment
@@ -568,6 +618,12 @@ interface PassReport {
 ### build/index.d.ts#PassRequest
 type PassRequest = "stop-switch" | "machines" | "view" | "destroy" | "remove" | "register" | "make";
 
+### build/index.d.ts#Period
+interface Period {
+  readonly from: number;
+  readonly to: number;
+}
+
 ### build/index.d.ts#Plan
 interface Plan {
   readonly state: DispatchState;
@@ -600,6 +656,13 @@ interface PlannedWait {
   readonly text: string;
 }
 
+### build/index.d.ts#QuantileBounds
+interface QuantileBounds {
+  readonly p: number;
+  readonly low: number;
+  readonly high: number | null;
+}
+
 ### build/index.d.ts#RepositoryObservation
 interface RepositoryObservation {
   readonly repository: string;
@@ -613,10 +676,25 @@ interface RunFailures {
   readonly at: number;
 }
 
+### build/index.d.ts#SUMMARY_LEVELS
+export declare const SUMMARY_LEVELS: readonly number[];
+
 ### build/index.d.ts#Span
 interface Span {
   readonly low: number;
   readonly high: number | null;
+}
+
+### build/index.d.ts#SpanSummary
+interface SpanSummary {
+  readonly count: number;
+  readonly open: number;
+  readonly quantiles: readonly QuantileBounds[];
+}
+
+### build/index.d.ts#SummaryOptions
+interface SummaryOptions {
+  readonly levels?: readonly number[];
 }
 
 ### build/index.d.ts#ViewRead
@@ -636,6 +714,15 @@ export declare function createDispatcher<Signal extends StopSignal = StopSignal>
 
 ### build/index.d.ts#due
 export declare function due(life: MachineLife, now: number, times: MachineTimes): MachineEvent | null;
+
+### build/index.d.ts#isJobMeasure
+export declare function isJobMeasure(value: unknown): value is JobMeasure;
+
+### build/index.d.ts#isMachineMeasure
+export declare function isMachineMeasure(value: unknown): value is MachineMeasure;
+
+### build/index.d.ts#isMoment
+export declare function isMoment(value: unknown): value is Moment;
 
 ### build/index.d.ts#jobSpans
 export declare function jobSpans(record: JobMeasure): JobSpans;
@@ -678,6 +765,12 @@ export declare function spanOf(from: Moment | number | null, to: Moment | null):
 
 ### build/index.d.ts#startLife
 export declare function startLife(at: number): MachineLife;
+
+### build/index.d.ts#summarizeMeasures
+export declare function summarizeMeasures(records: MeasureRecords, options?: SummaryOptions): MeasureSummary;
+
+### build/index.d.ts#summarizeSpans
+export declare function summarizeSpans(spans: readonly (Span | null)[], levels?: readonly number[]): SpanSummary | null;
 
 ### build/index.d.ts#waitOf
 export declare function waitOf(state: MachineState, times: MachineTimes, fired?: number): MachineWait | null;

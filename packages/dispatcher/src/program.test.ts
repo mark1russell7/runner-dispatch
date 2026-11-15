@@ -20,6 +20,7 @@ import {
   type ProgramPorts,
 } from "./program.ts";
 import { doc, GITHUB_TOKEN, groupApi, noProxmox, ORGANIZATION, PROXMOX_TOKEN, PVE, REPO, SECRETS, settle, wireOf } from "./fixtures.ts";
+import { recordsOfLogs } from "./measures-cli.ts";
 
 const programOf = (over: Record<string, unknown> = {}): Program => {
   const read = parseProgram(doc(over));
@@ -328,6 +329,11 @@ describe("a program on fakes", () => {
         spans: { queue: null, run: null },
       },
     ]);
+    // The command of the summary reads the same lines, as the command line writes them.
+    const records = recordsOfLogs([run.lines.map((each) => JSON.stringify(each)).join("\n")]);
+    expect(records).toMatchObject({ bad: 0, repeated: 0 });
+    expect(records.jobs).toEqual(measured.map((each) => (each.event === "job-measure" ? each.record : null)));
+    expect(records.machines.length).toBe(run.lines.filter((each) => each.event === "machine-measure").length);
     const logged = JSON.stringify(run.lines);
     for (const secret of [...secrets, GITHUB_TOKEN, PROXMOX_TOKEN, "0123-secret-of-proxmox"]) expect(logged).not.toContain(secret);
 

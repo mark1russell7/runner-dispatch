@@ -496,6 +496,27 @@ A property test on the fake world holds the bounds. It has random times, slow re
 - The bounds are correct when each view shows each run that is not complete, as the port `JobSource` states.
 - The memory of the measures is only in the process. After a new start, the record of an adopted machine has no time of its request.
 
+### The summary of the measures
+
+`summarizeMeasures` gives the summary `measure-summary/1` of many records. It is a function with no effect.
+
+```ts
+import { isJobMeasure, isMachineMeasure, summarizeMeasures } from "@mark1russell7/runner-dispatch";
+
+const summary = summarizeMeasures({ machines: lines.filter(isMachineMeasure), jobs: lines.filter(isJobMeasure) });
+summary.job.queue; // { count: 120, open: 3, quantiles: [{ p: 0.5, low: 41000, high: 52000 }, ...] }
+```
+
+- The summary has the count of the records, their period, and a summary of each span of a machine and of a job.
+- The summary of a span has the bounds of each quantile. The default levels are 0.5, 0.9 and 0.99.
+- The quantile is the nearest rank: the value at the rank `ceil(p * n)` of the `n` sorted times.
+- The low bound is the quantile of the low bounds of the spans, and the high bound is the quantile of their high bounds.
+- Each span holds its true time. Thus each pair of bounds holds the true quantile, because a sort keeps the order of each pair.
+- A span with no high bound counts in `open`. When such spans have the rank of a quantile, the quantile has no high bound.
+- `isMachineMeasure`, `isJobMeasure` and `isMoment` examine a record that comes from a log or from JSON.
+
+A property test holds the bounds: for random times and random spans that hold them, each pair of bounds holds the true quantile.
+
 ### The fake world
 
 The entry `@mark1russell7/runner-dispatch/testing` has a source and a provider for tests, on one clock.
