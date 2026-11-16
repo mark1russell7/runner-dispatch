@@ -205,6 +205,44 @@ The primary limit of a token is the limit of its user. Thus each other client of
 
 The docs of GitHub do not fix the format of the header of the permissions. Thus the record keeps the text of the header, and also its sets. A semicolon separates two sets, and a comma separates two permissions of one set.
 
+### The result of a run
+
+A run on 2026-11-15 used a fine-grained token, one repository and its organization on the Free plan, with `--group`. Each of its 23 requests got the expected status, and the probe removed its runner and its group.
+
+| Requests | Status | The permission that GitHub names |
+| --- | --- | --- |
+| The queued runs, one run and its jobs | 200 | `actions=read` |
+| The repository | 200 | `metadata=read` |
+| The runners and the runner groups of the organization | 200 | `organization_self_hosted_runners=read` |
+| One group, its repositories and its runners, and one runner | 200 | `organization_self_hosted_runners=read` |
+| A new runner group, and a new one-job runner | 201 | `organization_self_hosted_runners=write` |
+| The removal of the runner, and the removal of the group | 204 | `organization_self_hosted_runners=write` |
+| The rate | 200 | `allows_permissionless_access=true` |
+
+Thus the fine-grained token of a dispatcher for an organization needs three permissions:
+
+| Permission | Level | Where |
+| --- | --- | --- |
+| Actions | Read | Each served repository |
+| Metadata | Read | Each served repository |
+| Self-hosted runners | Read and write | The organization |
+
+The run also gave these facts:
+
+- An answer 304 costs nothing. Each of the 5 conditional requests added 0 to the count of the used requests, in one round with no noise.
+- A one-job runner gets only the labels of the request, with the type `read-only`. GitHub added no default label, for example `self-hosted`.
+- Thus a job gets a one-job runner only when its `runs-on` names a label of the request.
+- Before the run, the organization had one runner group: `Default`, with the visibility `all`. This group does not admit public repositories.
+- The Free plan permitted a new group with the visibility `selected`, and a one-job runner in this group. `checkRunnerGroup` found no problem in the group.
+
+The header `x-ratelimit-used` had two series of values in this run:
+
+- The requests of the repository, the reads of the rate and the new group counted in one series.
+- The other requests of the runners and the groups of the organization counted in a second series.
+- The probe does not tell the cause. The measure of an answer 304 uses requests of the first series only.
+
+No run measured the path with no organization, where the runners are those of one repository.
+
 ## The tests
 
 Tests start the service on the fake world of `@mark1russell7/runner-dispatch/testing`, with the fake clock of `@mark1russell7/service/testing`:
