@@ -26,7 +26,7 @@ defaults:
 
 jobs:
   ci:
-    uses: mark1russell7/template/.github/workflows/reusable-ci.yml@eb7f3517aa8614e338a46acd37ab0c49395be5f9 # main
+    uses: mark1russell7/template/.github/workflows/reusable-ci.yml@344f57ab83aee6b7ff58a0f178bbdad6f82282e9 # main
 
   # Each preset of `pnpm package add` makes a package, and that package passes its typecheck and its tests.
   # The tests of the preset service hold its entry to describe() and lint() of @mark1russell7/service (OTH-5).
@@ -129,7 +129,7 @@ jobs:
       # The same browser and the same check as reusable-pages.yml
       - name: Install the browser of the site check
         run: npm install --prefix "$RUNNER_TEMP/site-check-playwright" --no-save --no-package-lock --no-audit --no-fund playwright-core@1.64.1
-      - uses: mark1russell7/template/.github/actions/setup-playwright@eb7f3517aa8614e338a46acd37ab0c49395be5f9 # main
+      - uses: mark1russell7/template/.github/actions/setup-playwright@344f57ab83aee6b7ff58a0f178bbdad6f82282e9 # main
         with:
           command: ${{ runner.temp }}/site-check-playwright/node_modules/.bin/playwright-core
           browsers: chromium
