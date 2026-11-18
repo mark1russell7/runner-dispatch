@@ -23,7 +23,7 @@
     "@mark1russell7/boundaries": "^0.3.0",
     "@mark1russell7/conventions": "^0.46.2",
     "@mark1russell7/cue": "^2.0.0",
-    "@mark1russell7/ste-lint": "^0.3.0",
+    "@mark1russell7/ste-lint": "^0.4.0",
     "@mark1russell7/template-cli": "^0.1.7",
     "@swc/core": "^1.15.0",
     "@types/node": "^26.6.5",
