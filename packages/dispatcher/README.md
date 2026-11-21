@@ -179,6 +179,39 @@ Thus the next pass changes nothing until a different process acts. More about a 
 
 Thus a CI job can do a round with the token in one step, and start the runners in a later step with no secret.
 
+## The starter
+
+The entry `src/starter-bin.ts` is the command `runner-dispatch-starter`. It starts the runner program of each folder that waits, one at a time:
+
+```sh
+node src/starter-bin.ts /var/lib/runner-dispatch/folders --runner /opt/actions-runner \
+  --check /opt/runner-dispatch/node_modules/@mark1russell7/runner-dispatch/build/cli/job-started.js
+```
+
+`startRunners` of `src/starter.ts` obeys the rules of the starter in the README of `@mark1russell7/runner-dispatch`:
+
+- The command needs no token, and it reads no secret of the dispatcher.
+- It writes `started` with the flag `wx`. Thus two starters do not start the same folder.
+- It reads and removes `configuration` before the start.
+- It stops a runner at the file `stop`, at the time `--deadline` or at a `SIGINT` or a `SIGTERM`.
+- A stop sends `SIGINT` to the process group of the runner. After the time `--grace`, it sends `SIGKILL`.
+- It writes `exited` after each end. The record `starter-exited/1` has the reason `end`, `start`, `stop`, `deadline` or `signal`.
+- It starts one runner at a time, because one folder of the runner program holds one runner.
+
+The environment of the runner program:
+
+- The runner gets only `PATH`, `HOME`, `USER`, `LANG` and `TMPDIR` of the starter. Thus no secret of the starter goes to a job.
+- The configuration goes in `ACTIONS_RUNNER_INPUT_JITCONFIG`, not in an argument. The list of processes shows each argument.
+- The runner program removes that variable from its environment when it reads it.
+- `ACTIONS_RUNNER_HOOK_JOB_STARTED` names a hook script in a temporary folder with the mode `0o700`.
+- The hook script starts the check with fixed absolute paths. Thus a variable of a job cannot change the check or its settings.
+
+Each line of stdout is one line of JSON: `started`, `output`, `exited`, `taken`, `problem` and the last line `starter`. Each line of the runner output goes through `redactSecrets`, with each configuration that the starter read.
+
+The exit codes are 0 when no folder waits or after a signal, 1 for a problem and 2 for a bad command.
+
+A limit: a starter that stops with no signal, as at a `SIGKILL`, leaves `started` with no `exited`. The runner can operate after that stop, because it leads its own process group. A later starter does not start that folder again, and the folder stays until an operator removes it.
+
 ## The summary of the measures
 
 The entry `src/measures-bin.ts` reads the logs of the program and writes the summary `measure-summary/1` of `summarizeMeasures`:
@@ -321,5 +354,14 @@ Tests hold the rounds and the folders:
 - The folder of a runner that exited goes away in the next round.
 - A round ends at its count of passes. A signal stops it before a pass or during a sleep.
 - `nodeFolderStore` writes, reads, lists and removes in a temporary folder. It refuses a bad name and a stopped signal.
+- `nodeFolderStore` makes a file only when the file is not there, and it removes one file of a folder.
+
+Tests hold the starter:
+
+- The starter writes `started` and removes `configuration` before the start. The configuration is in the environment of the runner.
+- It starts one runner at a time, in the order of the names. It does not start a folder that a different starter took.
+- The file `stop`, the deadline and the signal stop the runner, with `SIGINT` to its group, then `SIGKILL`.
+- A failed start, an empty configuration and a failed request give the reason `start`. No log line has the configuration.
+- The command gives the runner a clean environment and the hook of its folder. No output line has the configuration.
 
 The shared fakes of the tests are in `src/fixtures.ts`.
