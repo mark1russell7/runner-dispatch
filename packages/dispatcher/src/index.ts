@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { delay, platformClock } from "@mark1russell7/algebra/clock";
 import {
   createDispatcher,
   type DispatchSettings,
@@ -201,4 +202,110 @@ export const declare = (options: Options): ServiceBuilder => {
       .startup(s(30))
       .profile(options.profile)
   );
+};
+
+/** This constant is the default count of passes of a round, at most. */
+export const ROUND_PASSES = 30;
+
+/** This type has the parts of a dispatcher for a round: the options of the service, with no loop and no profile. */
+export type RoundParts = Pick<Options, "rules" | "times" | "settings" | "source" | "provider" | "stopped" | "onReport" | "clock" | "suffix">;
+
+/** These are the options of a round. */
+export interface RoundOptions extends RoundParts {
+  /** This field is the count of passes of the round, at most. */
+  readonly passes: number;
+  /** This field is the time from the end of a pass to the start of the next pass, in seconds. */
+  readonly sleep: number;
+  /**
+   * This function waits for a time in milliseconds, for a test. The default is `delay` on the clock of the round.
+   * The default clock is `platformClock()`, because its timers keep the process alive.
+   */
+  readonly wait?: ((ms: number, signal: AbortSignal) => Promise<void>) | undefined;
+}
+
+/**
+ * This type tells why a round ended:
+ *
+ * - `settled`: a pass was settled.
+ * - `bound`: the round did its count of passes, and no pass was settled.
+ * - `signal`: the signal stopped the round.
+ */
+export type RoundEnd = "settled" | "bound" | "signal";
+
+/** This record is the result of a round. */
+export interface RoundResult {
+  /** This field is the count of the passes of the round. */
+  readonly passes: number;
+  /** This field tells why the round ended. */
+  readonly end: RoundEnd;
+  /** This field is the count of the passes with a request that failed. */
+  readonly failures: number;
+}
+
+/**
+ * This function tells if a pass is settled: the next pass changes nothing until a different process acts.
+ *
+ * - The pass read the stop switch, and the signal did not stop it.
+ * - The pass made no transition, adopted no machine and sent no request. No request failed.
+ * - Each machine is in the state `asked`. It waits for the starter of its runner.
+ *
+ * @param report - The report of the pass
+ * @returns `true` when the pass is settled
+ */
+export const settled = (report: PassReport): boolean =>
+  report.stopped !== null &&
+  !report.cut &&
+  report.steps.length + report.adopted.length + report.destroys.length + report.removals.length + report.made.length + report.failures.length === 0 &&
+  report.lives.every((each) => each.life.state === "asked");
+
+/**
+ * This function does one round: passes until a pass is settled, or until the count `passes`. Then it ends.
+ * A round lets a different process start each runner between two rounds. Thus no runner operates in the process of the token.
+ *
+ * - A new round adopts each machine of the provider, because the memory of a round ends with its process.
+ * - A pass that failed does not stop the round. The next pass tries again after the sleep.
+ * - The signal stops the round after its pass, or during its sleep.
+ *
+ * @param options - The parts of a dispatcher, the count of passes and the sleep
+ * @param signal - The signal that stops the round
+ * @returns The result of the round
+ * @throws RangeError when the parts, the count of passes or the sleep are not valid
+ */
+export const round = async (options: RoundOptions, signal: AbortSignal): Promise<RoundResult> => {
+  if (!Number.isInteger(options.passes) || options.passes < 1) throw new RangeError("The count of passes of a round is not a whole number from 1.");
+  if (typeof options.sleep !== "number" || !Number.isFinite(options.sleep) || options.sleep < 0) throw new RangeError("The sleep of a round is not a number from 0.");
+  const clock = options.clock ?? platformClock();
+  const wait = options.wait ?? ((ms: number, stop: AbortSignal) => delay(clock, ms, stop));
+  const dispatcher = createDispatcher<AbortSignal>({
+    rules: options.rules,
+    times: options.times,
+    settings: options.settings,
+    source: options.source,
+    provider: options.provider,
+    now: () => clock.now(),
+    suffix: options.suffix ?? randomSuffix,
+    stopped: options.stopped,
+  });
+  let failures = 0;
+  for (let pass = 1; ; pass += 1) {
+    if (signal.aborted) return { passes: pass - 1, end: "signal", failures };
+    let report: PassReport;
+    try {
+      report = await dispatcher.pass(signal);
+    } catch (error) {
+      if (signal.aborted) return { passes: pass, end: "signal", failures };
+      throw error;
+    }
+    options.onReport(report);
+    if (report.failures.length > 0) failures += 1;
+    if (signal.aborted) return { passes: pass, end: "signal", failures };
+    if (settled(report)) return { passes: pass, end: "settled", failures };
+    if (pass >= options.passes) return { passes: pass, end: "bound", failures };
+    try {
+      await wait(options.sleep * 1000, signal);
+    } catch (error) {
+      if (signal.aborted) return { passes: pass, end: "signal", failures };
+      throw error;
+    }
+  }
 };

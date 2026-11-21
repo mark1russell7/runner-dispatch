@@ -10,19 +10,21 @@ import {
   type JobMeasure,
   type JobSpans,
   type MachineMeasure,
+  type MachineProvider,
   type MachineSpans,
   type MachineTimes,
   type MeasureState,
   type PassReport,
   type TrustRules,
 } from "@mark1russell7/runner-dispatch";
+import { createFolderProvider, type FolderStore } from "@mark1russell7/runner-dispatch/folder";
 import { checkRunnerGroup, createGitHubSource, type GitHubApi, type RunnerGroupCheck } from "@mark1russell7/runner-dispatch/github";
 import { createProxmoxProvider, type MachineFiles, type ProxmoxSize } from "@mark1russell7/runner-dispatch/proxmox";
 import { createProxmoxClient, isProxmoxToken, proxmoxUrlProblems, type ProxmoxTransport } from "@mark1russell7/runner-dispatch/proxmox-client";
 import { lint } from "@mark1russell7/service";
 import type { Clock, Finding, Lifecycle, ProcessPort, Scenario, ServiceBuilder, ServiceDescription } from "@mark1russell7/service";
 import { probeServer } from "@mark1russell7/service/http";
-import { declare, loopProblems, PROFILES, type LoopTimes } from "./index.ts";
+import { declare, loopProblems, PROFILES, type LoopTimes, type RoundParts, type RoundResult } from "./index.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
 
@@ -32,7 +34,10 @@ export const PROGRAM_FORMAT = "dispatcher-program/1";
 /** This constant is the base URL of the REST API of GitHub, the default of the field `github.url`. */
 export const GITHUB_API_URL = "https://api.github.com";
 
-/** These constants are the names of the environment variables of the two secrets. No document has a secret. */
+/**
+ * These constants are the names of the environment variables of the two secrets. No document has a secret.
+ * A program with the folder provider needs only the token of GitHub.
+ */
 export const SECRET_VARIABLES: { readonly github: "RUNNER_DISPATCH_GITHUB_TOKEN"; readonly proxmox: "RUNNER_DISPATCH_PROXMOX_TOKEN" } = Object.freeze({
   github: "RUNNER_DISPATCH_GITHUB_TOKEN",
   proxmox: "RUNNER_DISPATCH_PROXMOX_TOKEN",
@@ -71,6 +76,12 @@ export interface ProgramProxmox {
   readonly files: MachineFiles | null;
 }
 
+/** This record tells where the program writes the folder of each machine. A starter on the host starts each runner from its folder. */
+export interface ProgramFolder {
+  /** This field is the absolute path of the root folder. */
+  readonly root: string;
+}
+
 /** This record is the address of the server of the probes. */
 export interface ProgramProbes {
   /** This field is the address of the server, for example `127.0.0.1`. */
@@ -90,7 +101,10 @@ export interface Program {
   /** This field is the path of the stop file. When the file is there, the stop switch is on. */
   readonly stop: string;
   readonly github: ProgramGitHub;
-  readonly proxmox: ProgramProxmox;
+  /** This field tells how the program makes machines on Proxmox VE. It is `null` for a program with the folder provider. */
+  readonly proxmox: ProgramProxmox | null;
+  /** This field tells where the program writes the folders of the machines. It is `null` for a program with the Proxmox provider. */
+  readonly folder: ProgramFolder | null;
   /** This field is the address of the server of the probes, or `null` for no server. */
   readonly probes: ProgramProbes | null;
 }
@@ -98,15 +112,16 @@ export interface Program {
 /** This type is the result of a reader: the value, or the list of the problems. */
 export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly problems: readonly string[] };
 
-/** This record has the two secrets of a program. */
+/** This record has the secrets of a program. */
 export interface Secrets {
   /** This field is the token of the REST API of GitHub. */
   readonly github: string;
-  /** This field is the API token of Proxmox VE, as `USER@REALM!TOKENID=SECRET`. */
-  readonly proxmox: string;
+  /** This field is the API token of Proxmox VE, as `USER@REALM!TOKENID=SECRET`. It is `null` for a program with the folder provider. */
+  readonly proxmox: string | null;
 }
 
-const PROGRAM_KEYS: readonly string[] = ["format", "rules", "times", "settings", "loop", "profile", "stop", "github", "proxmox", "probes"];
+const PROGRAM_KEYS: readonly string[] = ["format", "rules", "times", "settings", "loop", "profile", "stop", "github", "proxmox", "folder", "probes"];
+const FOLDER_KEYS: readonly string[] = ["root"];
 const GITHUB_KEYS: readonly string[] = ["url", "organization", "runnerGroup", "publicRepositories"];
 const PROXMOX_KEYS: readonly string[] = ["url", "pool", "sizes", "files"];
 const PROBES_KEYS: readonly string[] = ["host", "port"];
@@ -176,6 +191,19 @@ function readProxmox(value: unknown, problems: string[]): ProgramProxmox | null 
   };
 }
 
+/** This function tells if a value is an absolute path of POSIX or of Windows. */
+const isAbsolutePath = (value: unknown): value is string => typeof value === "string" && (value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value));
+
+function readFolder(value: unknown, problems: string[]): ProgramFolder | null {
+  if (!isRecord(value)) {
+    problems.push("The field folder is not an object.");
+    return null;
+  }
+  problems.push(...unknownKeys(value, FOLDER_KEYS, "field folder"));
+  if (!isAbsolutePath(value["root"])) problems.push("The field folder.root is not an absolute path.");
+  return { root: String(value["root"]) };
+}
+
 function readProbes(value: unknown, problems: string[]): ProgramProbes | null {
   if (value === undefined || value === null) return null;
   if (!isRecord(value)) {
@@ -203,6 +231,7 @@ function readLoop(value: unknown, problems: string[]): LoopTimes | null {
  *
  * - The fields `rules`, `times` and `settings` are the documents `trust-rules/1`, `machine-times/1` and `dispatch-settings/1`.
  * - The field `loop` has the times of the loop. They keep the time `pass` of the machines.
+ * - The document has one provider: the field `proxmox` or the field `folder`.
  * - Proxmox VE has a template for each size of the settings.
  *
  * @param value - The parsed JSON of the document
@@ -224,36 +253,49 @@ export function parseProgram(value: unknown): Result<Program> {
   const profile = value["profile"];
   if (profile !== "local" && profile !== "daemon") problems.push('The field profile is not "local" or "daemon".');
   const stop = value["stop"];
-  if (typeof stop !== "string" || !(stop.startsWith("/") || /^[A-Za-z]:[\\/]/.test(stop))) problems.push("The field stop is not an absolute path.");
+  if (!isAbsolutePath(stop)) problems.push("The field stop is not an absolute path.");
   const github = readGitHub(value["github"], problems);
-  const proxmox = readProxmox(value["proxmox"], problems);
+  const hasProxmox = value["proxmox"] !== undefined;
+  const hasFolder = value["folder"] !== undefined;
+  if (!hasProxmox && !hasFolder) problems.push("The document has no provider. Give the field proxmox or the field folder.");
+  if (hasProxmox && hasFolder) problems.push("The document has two providers. Give the field proxmox or the field folder, not the two.");
+  const proxmox = hasProxmox ? readProxmox(value["proxmox"], problems) : null;
+  const folder = hasFolder ? readFolder(value["folder"], problems) : null;
   const probes = readProbes(value["probes"], problems);
   if (settings.ok && proxmox !== null) {
     for (const size of settings.settings.sizes) {
       if (!Object.hasOwn(proxmox.sizes, size)) problems.push(`The size ${size} of the settings has no template in the field proxmox.sizes.`);
     }
   }
-  if (problems.length > 0 || !rules.ok || !times.ok || !settings.ok || loop === null || github === null || proxmox === null) return { ok: false, problems };
+  if (problems.length > 0 || !rules.ok || !times.ok || !settings.ok || loop === null || github === null) return { ok: false, problems };
   return {
     ok: true,
-    value: { rules: rules.rules, times: times.times, settings: settings.settings, loop, profile: profile as Program["profile"], stop: String(stop), github, proxmox, probes },
+    value: { rules: rules.rules, times: times.times, settings: settings.settings, loop, profile: profile as Program["profile"], stop: String(stop), github, proxmox, folder, probes },
   };
 }
 
+/** This record tells which secrets a program needs. A program needs the token of GitHub in each case. */
+export interface SecretNeeds {
+  /** This field is `true` when the program needs the token of Proxmox VE. */
+  readonly proxmox: boolean;
+}
+
 /**
- * This function reads the two secrets from the environment. The text of a problem names the variable, and it has no value.
+ * This function reads the secrets from the environment. The text of a problem names the variable, and it has no value.
+ * When the program does not need the token of Proxmox VE, the function does not read its variable.
  *
  * @param env - The environment of the process
+ * @param needs - The secrets that the program needs. The default needs the two tokens.
  * @returns The secrets, or each problem
  */
-export function readSecrets(env: Readonly<Record<string, string | undefined>>): Result<Secrets> {
+export function readSecrets(env: Readonly<Record<string, string | undefined>>, needs: SecretNeeds = { proxmox: true }): Result<Secrets> {
   const github = env[SECRET_VARIABLES.github];
-  const proxmox = env[SECRET_VARIABLES.proxmox];
+  const proxmox = needs.proxmox ? env[SECRET_VARIABLES.proxmox] : null;
   const problems: string[] = [];
   if (github === undefined || github === "") problems.push(`The variable ${SECRET_VARIABLES.github} is not set.`);
   else if (!isGitHubToken(github)) problems.push(`The variable ${SECRET_VARIABLES.github} is not a token: it has a space, a line break or a character that is not ASCII.`);
   if (proxmox === undefined || proxmox === "") problems.push(`The variable ${SECRET_VARIABLES.proxmox} is not set.`);
-  else if (!isProxmoxToken(proxmox)) problems.push(`The variable ${SECRET_VARIABLES.proxmox} is not of the form USER@REALM!TOKENID=SECRET.`);
+  else if (proxmox !== null && !isProxmoxToken(proxmox)) problems.push(`The variable ${SECRET_VARIABLES.proxmox} is not of the form USER@REALM!TOKENID=SECRET.`);
   return problems.length > 0 || github === undefined || proxmox === undefined ? { ok: false, problems } : { ok: true, value: { github, proxmox } };
 }
 
@@ -265,6 +307,7 @@ export type LogLine =
   | { readonly event: "pass-failed"; readonly failures: number; readonly text: string }
   | { readonly event: "problem"; readonly text: string }
   | { readonly event: "runner-group"; readonly check: RunnerGroupCheck }
+  | { readonly event: "round"; readonly result: RoundResult }
   | { readonly event: "declaration"; readonly findings: readonly Pick<Finding, "rule" | "scope" | "verdict">[] };
 
 /** These are the ports of a program: the clients of the two APIs, the stop file, the log, and the parts of a test. */
@@ -273,6 +316,8 @@ export interface ProgramPorts {
   readonly github: (options: { readonly url: string; readonly token: string }) => GitHubApi<AbortSignal>;
   /** This function makes the transport of the client of Proxmox VE, for its base URL. */
   readonly proxmox: (url: string) => ProxmoxTransport<AbortSignal>;
+  /** This function makes the store of the folder provider, for its root folder. */
+  readonly folders: (root: string) => FolderStore<AbortSignal>;
   /** This function tells if the stop file is there. */
   readonly exists: (path: string) => Promise<boolean>;
   /** This function writes one line of the log. */
@@ -289,9 +334,11 @@ export interface ProgramPorts {
   readonly signal?: AbortSignal | undefined;
 }
 
-/** This record is a prepared program: the builder of the service, its declaration as data, and the findings of its lint. */
+/** This record is a prepared program: the builder of the service, its declaration, the findings of its lint and the parts of a round. */
 export interface Prepared {
   readonly builder: ServiceBuilder;
+  /** This field has the parts of the dispatcher for `round`. The service and a round use the same source, provider and log. */
+  readonly parts: RoundParts;
   readonly description: ServiceDescription;
   readonly findings: readonly Finding[];
   /** This field is the result of the check of the runner group, or `null` without an organization. */
@@ -337,31 +384,39 @@ export async function prepareProgram(program: Program, secrets: Secrets, ports: 
   }
 
   let builder: ServiceBuilder;
+  let parts: RoundParts;
   let waits = -1;
   let measures: MeasureState = EMPTY_MEASURES;
+  const problem = (text: string): void => ports.log({ event: "problem", text });
   try {
-    const client = createProxmoxClient({ url: program.proxmox.url, token: secrets.proxmox, transport: ports.proxmox(program.proxmox.url) });
-    const provider = createProxmoxProvider({
-      api: client,
-      pool: program.proxmox.pool,
-      sizes: program.proxmox.sizes,
-      ...(program.proxmox.files === null ? {} : { files: program.proxmox.files }),
-      problem: (text) => ports.log({ event: "problem", text }),
-    });
+    let provider: MachineProvider<AbortSignal>;
+    if (program.proxmox !== null) {
+      if (secrets.proxmox === null) return { ok: false, problems: [`The variable ${SECRET_VARIABLES.proxmox} is not set.`] };
+      const client = createProxmoxClient({ url: program.proxmox.url, token: secrets.proxmox, transport: ports.proxmox(program.proxmox.url) });
+      provider = createProxmoxProvider({
+        api: client,
+        pool: program.proxmox.pool,
+        sizes: program.proxmox.sizes,
+        ...(program.proxmox.files === null ? {} : { files: program.proxmox.files }),
+        problem,
+      });
+    } else if (program.folder !== null) {
+      provider = createFolderProvider({ store: ports.folders(program.folder.root), problem });
+    } else {
+      return { ok: false, problems: ["The program has no provider."] };
+    }
     const source = createGitHubSource({
       api,
       ...(program.github.organization === null ? {} : { organization: program.github.organization }),
       ...(program.github.runnerGroup === null ? {} : { runnerGroup: program.github.runnerGroup }),
     });
-    builder = declare({
+    parts = {
       rules: program.rules,
       times: program.times,
       settings: program.settings,
       source,
       provider,
       stopped: () => ports.exists(program.stop),
-      loop: program.loop,
-      profile: PROFILES[program.profile],
       onReport: (report) => {
         // Each pass goes into the measures. A record goes to the log when its machine or its job is complete.
         const note = noteReport(measures, report);
@@ -373,10 +428,15 @@ export async function prepareProgram(program: Program, secrets: Secrets, ports: 
         const { lives, jobs, ...rest } = report;
         ports.log({ event: "pass", report: rest, machines: lives.length, jobs: jobs.length });
       },
-      onError: (error, failures) => ports.log({ event: "pass-failed", failures, text: textOf(error) }),
       clock: ports.clock,
-      random: ports.random,
       suffix: ports.suffix,
+    };
+    builder = declare({
+      ...parts,
+      loop: program.loop,
+      profile: PROFILES[program.profile],
+      onError: (error, failures) => ports.log({ event: "pass-failed", failures, text: textOf(error) }),
+      random: ports.random,
     });
     if (program.probes !== null) builder = builder.healthServer(probeServer({ host: program.probes.host, port: program.probes.port, server_retry_after: s(1) }));
   } catch (error) {
@@ -391,7 +451,7 @@ export async function prepareProgram(program: Program, secrets: Secrets, ports: 
   if (violated.length > 0) {
     return { ok: false, problems: violated.map((finding) => `The declaration violates the rule ${finding.rule} at ${finding.scope}.`) };
   }
-  return { ok: true, value: { builder, description, findings, group } };
+  return { ok: true, value: { builder, parts, description, findings, group } };
 }
 
 /**

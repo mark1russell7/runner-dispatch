@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import type { GitHubApi } from "@mark1russell7/runner-dispatch/github";
 import type { ProxmoxTransport } from "@mark1russell7/runner-dispatch/proxmox-client";
-import { countingSuffix, fakeGitHubApi, fakeProxmox, fakeWorld, type FakeProxmox, type FakeWorld } from "@mark1russell7/runner-dispatch/testing";
+import { countingSuffix, fakeFolders, fakeGitHubApi, fakeProxmox, fakeWorld, type FakeProxmox, type FakeWorld } from "@mark1russell7/runner-dispatch/testing";
 import { UNIT_BOUND_RULE, type Lifecycle } from "@mark1russell7/service";
 import { nodeHostPorts, probeOnce } from "@mark1russell7/service/host";
 import { fakeClock, fakeProcess, type FakeClock } from "@mark1russell7/service/testing";
@@ -28,6 +28,9 @@ const programOf = (over: Record<string, unknown> = {}): Program => {
   return read.value;
 };
 
+/** This constant is the field of a document with the folder provider. */
+const FOLDER = { proxmox: undefined, folder: { root: "/run/runner-dispatch/folders" } } as const;
+
 const problemsOf = (value: unknown): readonly string[] => {
   const read = parseProgram(value);
   return read.ok ? [] : read.problems;
@@ -40,7 +43,7 @@ describe("parseProgram", () => {
     if (!read.ok) return;
     expect(read.value.github).toEqual({ url: GITHUB_API_URL, organization: null, runnerGroup: null, publicRepositories: false });
     expect(read.value.probes).toBeNull();
-    expect(read.value.proxmox.files).toBeNull();
+    expect(read.value.proxmox?.files).toBeNull();
     expect(read.value.settings.sizes).toEqual(["small"]);
     expect(read.value.times.pass).toBe(10);
     expect(read.value.profile).toBe("local");
@@ -61,8 +64,20 @@ describe("parseProgram", () => {
     if (!read.ok) return;
     expect(read.value.github).toEqual({ url: "https://ghe.example/api/v3", organization: "octo", runnerGroup: 3, publicRepositories: true });
     expect(read.value.probes).toEqual({ host: "127.0.0.1", port: 9464 });
-    expect(read.value.proxmox.files).toEqual(files);
+    expect(read.value.proxmox?.files).toEqual(files);
     expect(read.value.profile).toBe("daemon");
+  });
+
+  it("reads a document with the folder provider and a Windows path of the root", () => {
+    const read = parseProgram(doc(FOLDER));
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.value.proxmox).toBeNull();
+    expect(read.value.folder).toEqual({ root: "/run/runner-dispatch/folders" });
+    const windows = parseProgram(doc({ proxmox: undefined, folder: { root: "D:\\runners" } }));
+    expect(windows.ok && windows.value.folder).toEqual({ root: "D:\\runners" });
+    const proxmox = parseProgram(doc());
+    expect(proxmox.ok && proxmox.value.folder).toBeNull();
   });
 
   const bad: readonly (readonly [string, unknown, string])[] = [
@@ -91,6 +106,11 @@ describe("parseProgram", () => {
     ["sizes that are not an object", doc({ proxmox: { url: PVE, pool: "runners", sizes: [] } }), "The field proxmox.sizes is not an object."],
     ["files that are not an object", doc({ proxmox: { url: PVE, pool: "runners", sizes: {}, files: "/run" } }), "The field proxmox.files is not an object."],
     ["a size of the settings with no template", doc({ proxmox: { url: PVE, pool: "runners", sizes: {} } }), "The size small of the settings has no template in the field proxmox.sizes."],
+    ["no provider", doc({ proxmox: undefined }), "The document has no provider. Give the field proxmox or the field folder."],
+    ["two providers", doc({ folder: { root: "/run/rd" } }), "The document has two providers. Give the field proxmox or the field folder, not the two."],
+    ["a folder that is not an object", doc({ proxmox: undefined, folder: "/run/rd" }), "The field folder is not an object."],
+    ["a relative root of the folders", doc({ proxmox: undefined, folder: { root: "folders" } }), "The field folder.root is not an absolute path."],
+    ["an unknown field of the folder", doc({ proxmox: undefined, folder: { root: "/run/rd", mode: 448 } }), 'The field folder has the unknown field "mode".'],
     ["probes that are not an object", doc({ probes: 9464 }), "The field probes is not an object."],
     ["a port of the probes out of range", doc({ probes: { port: 70_000 } }), "The field probes.port is not a port from 1 to 65535."],
     ["a host of the probes with a space", doc({ probes: { port: 9464, host: "a b" } }), "The field probes.host is not a host name or an address."],
@@ -137,6 +157,12 @@ describe("readSecrets", () => {
     ]);
     expect(read.problems.join(" ")).not.toContain("secret");
   });
+
+  it("reads only the token of GitHub for a program that does not need the token of Proxmox VE", () => {
+    expect(readSecrets(env(GITHUB_TOKEN, undefined), { proxmox: false })).toEqual({ ok: true, value: { github: GITHUB_TOKEN, proxmox: null } });
+    expect(readSecrets(env(GITHUB_TOKEN, "a-bad-proxmox-value"), { proxmox: false })).toEqual({ ok: true, value: { github: GITHUB_TOKEN, proxmox: null } });
+    expect(readSecrets(env(undefined, PROXMOX_TOKEN), { proxmox: false })).toEqual({ ok: false, problems: ["The variable RUNNER_DISPATCH_GITHUB_TOKEN is not set."] });
+  });
 });
 
 describe("livenessUrl", () => {
@@ -152,17 +178,23 @@ describe("livenessUrl", () => {
 const portsOf = (api: GitHubApi<AbortSignal>, transport: ProxmoxTransport<AbortSignal>, stop = false) => {
   const lines: LogLine[] = [];
   const opened: { url: string; token: string }[] = [];
+  const roots: string[] = [];
+  const folders = fakeFolders();
   const ports: ProgramPorts = {
     github: (options) => {
       opened.push(options);
       return api;
     },
     proxmox: () => transport,
+    folders: (root) => {
+      roots.push(root);
+      return folders.store;
+    },
     exists: () => Promise.resolve(stop),
     log: (line) => lines.push(line),
     signal: new AbortController().signal,
   };
-  return { ports, lines, opened };
+  return { ports, lines, opened, roots, folders };
 };
 
 
@@ -234,6 +266,21 @@ describe("prepareProgram", () => {
     if (!read.ok) return;
     const prepared = await prepareProgram(read.value, SECRETS, portsOf(groupApi().api, noProxmox).ports);
     expect(prepared.ok ? [] : prepared.problems).toEqual([]);
+  });
+
+  it("prepares a program with the folder provider and no token of Proxmox VE, and gives the parts of a round", async () => {
+    const at = portsOf(groupApi().api, noProxmox);
+    const prepared = await prepareProgram(programOf(FOLDER), { github: GITHUB_TOKEN, proxmox: null }, at.ports);
+    expect(prepared.ok ? [] : prepared.problems).toEqual([]);
+    if (!prepared.ok) return;
+    expect(at.roots).toEqual(["/run/runner-dispatch/folders"]);
+    expect(prepared.value.parts.rules).toEqual(programOf(FOLDER).rules);
+    expect(await prepared.value.parts.provider.machines(new AbortController().signal)).toEqual([]);
+  });
+
+  it("refuses a program with the Proxmox provider and no token of Proxmox VE", async () => {
+    const prepared = await prepareProgram(programOf(), { github: GITHUB_TOKEN, proxmox: null }, portsOf(groupApi().api, noProxmox).ports);
+    expect(prepared).toEqual({ ok: false, problems: [`The variable ${SECRET_VARIABLES.proxmox} is not set.`] });
   });
 
   it("throws when GitHub gives no answer to the check of the runner group, and the error has no token", async () => {
