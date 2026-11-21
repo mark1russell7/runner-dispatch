@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@mark1russell7/runner-dispatch",
-  "version": "0.1.3",
-  "description": "One-job CI runners for trusted jobs: the records of a run, a job and a machine, the trust rules as data, the check on the machine, the life of a machine as a state machine, the dispatcher, the GitHub source and the Proxmox provider.",
+  "version": "0.1.4",
+  "description": "One-job CI runners for trusted jobs: the records of a run, a job and a machine, the trust rules as data, the check on the machine, the life of a machine as a state machine, the dispatcher, the GitHub source, the Proxmox provider and the folder provider.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -28,6 +28,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./github": "./src/github.ts",
+    "./folder": "./src/folder.ts",
     "./proxmox": "./src/proxmox.ts",
     "./proxmox-client": "./src/proxmox-client.ts",
     "./testing": "./src/testing.ts",
@@ -77,6 +78,11 @@
         "types": "./build/github.d.ts",
         "import": "./build/github.js",
         "default": "./build/github.js"
+      },
+      "./folder": {
+        "types": "./build/folder.d.ts",
+        "import": "./build/folder.js",
+        "default": "./build/folder.js"
       },
       "./proxmox": {
         "types": "./build/proxmox.d.ts",

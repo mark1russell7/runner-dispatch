@@ -1,5 +1,13 @@
 # Changes
 
+## 0.1.4
+
+- The new entry `@mark1russell7/runner-dispatch/folder` has the folder provider. Each machine is one folder of a store, with the name of the machine.
+- `createFolderProvider` writes the record of the machine, the settings of the check and then the configuration. A starter on the host starts the runner from the folder.
+- `folderStatus` gives the status of a machine from the marks `started` and `exited` of the starter. A destroy of a runner that operates writes the mark `stop`.
+- The port `FolderStore` is the store of the folders. The entry `testing` has `fakeFolders`, a store in memory.
+- The dispatcher and the starter share no process. Thus the starter needs no token of the source.
+
 ## 0.1.3
 
 - `summarizeMeasures` gives the summary `measure-summary/1` of the records of the machines and of the jobs.

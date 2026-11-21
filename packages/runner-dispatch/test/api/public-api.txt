@@ -160,6 +160,16 @@ isOrganizationName: build/github.d.ts#isOrganizationName
 judgeRunnerGroup: build/github.d.ts#judgeRunnerGroup
 organizationScope: build/github.d.ts#organizationScope
 
+## ./folder (build/folder.d.ts): names
+
+FOLDER_FILES: build/folder.chunk.d.ts#FOLDER_FILES
+FolderFile: build/folder.chunk.d.ts#FolderFile
+FolderProviderOptions: build/folder.chunk.d.ts#FolderProviderOptions
+FolderStore: build/folder.chunk.d.ts#FolderStore
+createFolderProvider: build/folder.chunk.d.ts#createFolderProvider
+folderStatus: build/folder.chunk.d.ts#folderStatus
+isFolderName: build/folder.chunk.d.ts#isFolderName
+
 ## ./proxmox (build/proxmox.d.ts): names
 
 DELIVERED_TAG: build/proxmox.chunk.d.ts#DELIVERED_TAG
@@ -193,6 +203,7 @@ proxmoxUrlProblems: build/proxmox-client.d.ts#proxmoxUrlProblems
 
 ## ./testing (build/testing.d.ts): names
 
+type FakeFolders: build/testing.d.ts#FakeFolders
 FakeGitHub: build/testing.d.ts#FakeGitHub
 FakeGitHubOptions: build/testing.d.ts#FakeGitHubOptions
 type FakeProxmox: build/testing.d.ts#FakeProxmox
@@ -201,6 +212,8 @@ type FakeTaskKind: build/testing.d.ts#FakeTaskKind
 type FakeVm: build/testing.d.ts#FakeVm
 FakeWorld: build/testing.d.ts#FakeWorld
 FakeWorldOptions: build/testing.d.ts#FakeWorldOptions
+type FolderChange: build/testing.d.ts#FolderChange
+type FolderRequest: build/testing.d.ts#FolderRequest
 WorldClock: build/testing.d.ts#WorldClock
 WorldEvent: build/testing.d.ts#WorldEvent
 WorldFault: build/testing.d.ts#WorldFault
@@ -213,6 +226,7 @@ WorldRun: build/testing.d.ts#WorldRun
 WorldRunner: build/testing.d.ts#WorldRunner
 WorldTimes: build/testing.d.ts#WorldTimes
 countingSuffix: build/testing.d.ts#countingSuffix
+fakeFolders: build/testing.d.ts#fakeFolders
 fakeGitHubApi: build/testing.d.ts#fakeGitHubApi
 fakeProxmox: build/testing.d.ts#fakeProxmox
 fakeWorld: build/testing.d.ts#fakeWorld
@@ -222,6 +236,43 @@ fakeWorld: build/testing.d.ts#fakeWorld
 runner-dispatch-job-started: ./build/cli/job-started.js
 
 ## Declarations
+
+### build/folder.chunk.d.ts#FOLDER_FILES
+declare const FOLDER_FILES: {
+  readonly machine: "machine.json";
+  readonly check: "check.json";
+  readonly configuration: "configuration";
+  readonly started: "started";
+  readonly exited: "exited";
+  readonly stop: "stop";
+};
+
+### build/folder.chunk.d.ts#FolderFile
+type FolderFile = (typeof FOLDER_FILES)[keyof typeof FOLDER_FILES];
+
+### build/folder.chunk.d.ts#FolderProviderOptions
+interface FolderProviderOptions<Signal extends StopSignal = StopSignal> {
+  readonly store: FolderStore<Signal>;
+  readonly problem?: (text: string) => void;
+}
+
+### build/folder.chunk.d.ts#FolderStore
+interface FolderStore<Signal extends StopSignal = StopSignal> {
+  folders(signal: Signal): Promise<readonly string[]>;
+  files(folder: string, signal: Signal): Promise<readonly string[] | null>;
+  read(folder: string, file: FolderFile, signal: Signal): Promise<string | null>;
+  write(folder: string, file: FolderFile, text: string, signal: Signal): Promise<void>;
+  remove(folder: string, signal: Signal): Promise<void>;
+}
+
+### build/folder.chunk.d.ts#createFolderProvider
+declare function createFolderProvider<Signal extends StopSignal = StopSignal>(options: FolderProviderOptions<Signal>): MachineProvider<Signal>;
+
+### build/folder.chunk.d.ts#folderStatus
+declare function folderStatus(files: readonly string[]): MachineStatus;
+
+### build/folder.chunk.d.ts#isFolderName
+declare function isFolderName(value: unknown): value is string;
 
 ### build/github.d.ts#GitHubAnswer
 export interface GitHubAnswer {
@@ -1145,6 +1196,17 @@ declare function machineDescription(machine: MachineRecord): string;
 ### build/proxmox.chunk.d.ts#parseMachineDescription
 declare function parseMachineDescription(description: unknown): MachineRecord | null;
 
+### build/testing.d.ts#FakeFolders
+interface FakeFolders {
+  readonly store: FolderStore;
+  tree(): ReadonlyMap<string, ReadonlyMap<string, string>>;
+  changes(): readonly FolderChange[];
+  put(folder: string, file: string, text: string): void;
+  drop(folder: string, file: string): void;
+  fail(request: FolderRequest): void;
+  heal(): void;
+}
+
 ### build/testing.d.ts#FakeGitHub
 export interface FakeGitHub {
   readonly api: GitHubApi;
@@ -1232,6 +1294,16 @@ export interface FakeWorldOptions {
   readonly organizations?: readonly string[];
 }
 
+### build/testing.d.ts#FolderChange
+interface FolderChange {
+  readonly kind: "write" | "remove";
+  readonly folder: string;
+  readonly file: FolderFile | null;
+}
+
+### build/testing.d.ts#FolderRequest
+type FolderRequest = "folders" | "files" | "read" | "write" | "remove";
+
 ### build/testing.d.ts#WorldClock
 export interface WorldClock {
   now(): number;
@@ -1295,6 +1367,9 @@ export interface WorldTimes {
 
 ### build/testing.d.ts#countingSuffix
 export declare function countingSuffix(first?: number): () => string;
+
+### build/testing.d.ts#fakeFolders
+export declare function fakeFolders(): FakeFolders;
 
 ### build/testing.d.ts#fakeGitHubApi
 export declare function fakeGitHubApi(world: FakeWorld, options?: FakeGitHubOptions): FakeGitHub;

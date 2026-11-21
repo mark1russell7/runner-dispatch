@@ -744,6 +744,58 @@ Give these privileges to the token and to its user. A token with separate privil
 
 - A test on a real host measures the steps, the privileges and the times. The program of the service is in `@runner-dispatch/dispatcher`.
 
+## The folder provider
+
+The entry `@mark1russell7/runner-dispatch/folder` has a provider on a store of folders. Each machine is one folder of the store, with the name of the machine. A starter on the host starts the runner program from each folder.
+
+```ts
+import { createFolderProvider } from "@mark1russell7/runner-dispatch/folder";
+
+const provider = createFolderProvider({ store });
+```
+
+`store` is the port `FolderStore`. It lists the folders and the files of a folder, and it reads, writes and removes them. A write is complete or absent, and only the accounts of the dispatcher and of the starter can read a file. The entry `testing` has `fakeFolders`, a store in memory.
+
+### The files of a folder
+
+| File | The writer | The content |
+| --- | --- | --- |
+| `machine.json` | The provider | The record of the machine, as the document `runner-machine/1` of the Proxmox provider |
+| `check.json` | The provider | The settings of the check on the machine, as the document `machine-check/1` |
+| `configuration` | The provider, last | The one-job configuration of the runner. The starter removes the file when it reads it. |
+| `started` | The starter, before the start of the runner | The record of the start |
+| `exited` | The starter, after the end of the runner | The record of the end |
+| `stop` | The provider, for a destroy of a runner that operates | Nothing |
+
+### The status of a machine
+
+| Files | Status |
+| --- | --- |
+| `exited` | `stopped` |
+| `started`, with no `exited` | `operating` |
+| `configuration`, with no `started` | `making`: the starter did not start the runner |
+| None of the three | `stopped`: the machine has no configuration, thus it cannot operate |
+
+- `make` refuses a folder that is there. Thus a provider does not write into the folder of a different machine.
+- `destroy` of a runner that operates writes `stop`, and it keeps the folder. The starter stops the runner and writes `exited`. The next destroy removes the folder.
+- A folder with no record of a machine with its name is not in the list. The provider does not change it or remove it, and it tells it one time.
+- No problem text and no error text has a part of the configuration.
+
+### Why a folder
+
+- The dispatcher needs the token of the source. The runner program and its jobs need no token. Thus they operate in different processes, and they share only the folders.
+- On a host with one account for each part, the starter cannot read the token, and the dispatcher cannot start a job.
+- A dispatcher that starts again reads the record of each machine from its folder.
+
+### The rules of the starter
+
+The starter is the part on the host. It obeys these rules:
+
+- It starts only a folder with the file `configuration` and no file `started`. It writes `started` first. Then it reads and removes `configuration`.
+- The job-started program of the runner reads the file `check.json` of the folder.
+- It writes `exited` after each end of the runner, also after a start that failed.
+- It stops the runner of a folder with the file `stop`, and then it writes `exited`.
+
 ## The tests
 
 Property tests on `fast-check` hold the rules of the policy:

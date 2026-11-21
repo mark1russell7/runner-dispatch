@@ -749,3 +749,4 @@ export function fakeGitHubApi(world: FakeWorld, options: FakeGitHubOptions = {})
 }
 
 export { fakeProxmox, type FakeProxmox, type FakeProxmoxOptions, type FakeTaskKind, type FakeVm } from "./proxmox-fake.ts";
+export { fakeFolders, type FakeFolders, type FolderChange, type FolderRequest } from "./folder-fake.ts";
