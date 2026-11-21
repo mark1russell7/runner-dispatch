@@ -1,10 +1,14 @@
 /**
- * This module has the fakes of the tests of the package. They are a document of a program, the two secrets, a GitHub API
- * from a script, and a transport on a fake Proxmox VE. The program does not import this module.
+ * This module has the fakes of the tests of the package. They are a document of a program, the two secrets and a GitHub API
+ * from a script. They are also a transport on a fake Proxmox VE and the folders of a starter. The program does not import this module.
  */
 import type { GitHubAnswer, GitHubApi, GitHubRequest } from "@mark1russell7/runner-dispatch/github";
 import type { ProxmoxApi } from "@mark1russell7/runner-dispatch/proxmox";
 import { PROXMOX_API_PATH, type ProxmoxExchange, type ProxmoxTransport } from "@mark1russell7/runner-dispatch/proxmox-client";
+import type { MachineRequest } from "@mark1russell7/runner-dispatch";
+import { createFolderProvider } from "@mark1russell7/runner-dispatch/folder";
+import type { FakeFolders } from "@mark1russell7/runner-dispatch/testing";
+import type { StarterStore } from "./folders.ts";
 import type { Secrets } from "./program.ts";
 
 /** This constant is the repository of the tests. */
@@ -100,3 +104,38 @@ export const groupApi = (over: Record<string, unknown> = {}, repositories: reado
 
 /** This function waits until Node.js has done the work that is ready. */
 export const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+/** This constant is the run of the folders of the tests of the starter. */
+const FOLDER_RUN = { repository: REPO, runId: 42, runAttempt: 1 };
+
+/** This function gives the store of a starter on a store of folders in memory. */
+export function starterStore(folders: FakeFolders): StarterStore {
+  return {
+    folders: (signal) => folders.store.folders(signal),
+    files: (folder, signal) => folders.store.files(folder, signal),
+    read: (folder, file, signal) => folders.store.read(folder, file, signal),
+    write: (folder, file, text, signal) => folders.store.write(folder, file, text, signal),
+    remove: (folder, signal) => folders.store.remove(folder, signal),
+    async create(folder, file, text, signal) {
+      const files = await folders.store.files(folder, signal);
+      if (files === null) throw new Error(`The folder ${folder} is not there.`);
+      if (files.includes(file)) return false;
+      folders.put(folder, file, text);
+      return true;
+    },
+    async removeFile(folder, file, signal) {
+      if (signal.aborted) throw new Error("The signal stopped.");
+      folders.drop(folder, file);
+    },
+  };
+}
+
+/** This function makes the folder of a machine as the folder provider makes it, with the configuration `jit-<name>`. */
+export async function made(folders: FakeFolders, name: string, configuration = `jit-${name}`): Promise<void> {
+  const request: MachineRequest = {
+    machine: { name, size: "small", ...FOLDER_RUN },
+    configuration,
+    check: { rules: { repositories: [FOLDER_RUN.repository], events: ["push"], actors: ["octo"] }, run: FOLDER_RUN },
+  };
+  await createFolderProvider({ store: folders.store }).make(request, new AbortController().signal);
+}

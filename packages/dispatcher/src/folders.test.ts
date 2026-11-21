@@ -2,15 +2,15 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MachineRequest } from "@mark1russell7/runner-dispatch";
-import { createFolderProvider, type FolderStore } from "@mark1russell7/runner-dispatch/folder";
+import { createFolderProvider, type FolderFile } from "@mark1russell7/runner-dispatch/folder";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FILE_MODE, FOLDER_MODE, nodeFolderStore } from "./folders.ts";
+import { FILE_MODE, folderFilePath, FOLDER_MODE, nodeFolderStore, type StarterStore } from "./folders.ts";
 
 const OPEN = new AbortController().signal;
 
 let base = "";
 let root = "";
-let store: FolderStore<AbortSignal>;
+let store: StarterStore;
 
 beforeEach(async () => {
   base = await mkdtemp(join(tmpdir(), "runner-dispatch-folders-"));
@@ -73,15 +73,48 @@ describe("nodeFolderStore", () => {
     await expect(readdir(base)).resolves.toEqual([]);
   });
 
+  it("creates a file only when it is not there, as two starters do", async () => {
+    await store.write("rd-1", "configuration", "jit", OPEN);
+    expect(await store.create("rd-1", "started", "first", OPEN)).toBe(true);
+    expect(await store.create("rd-1", "started", "second", OPEN)).toBe(false);
+    expect(await store.read("rd-1", "started", OPEN)).toBe("first");
+    await expect(store.create("rd-2", "started", "{}", OPEN)).rejects.toThrow();
+    expect(await store.folders(OPEN)).toEqual(["rd-1"]);
+  });
+
+  it("removes one file of a folder, and a removal of a file that is not there does nothing", async () => {
+    await store.write("rd-1", "configuration", "jit", OPEN);
+    await store.write("rd-1", "check.json", "{}", OPEN);
+    await store.removeFile("rd-1", "configuration", OPEN);
+    await store.removeFile("rd-1", "configuration", OPEN);
+    expect(await store.files("rd-1", OPEN)).toEqual(["check.json"]);
+  });
+
+  it("refuses each name that is not the name of a file of a folder", async () => {
+    for (const file of ["../machine.json", "notes.txt", "", "started/"] as unknown as FolderFile[]) {
+      await expect(store.write("rd-1", file, "{}", OPEN)).rejects.toThrow(RangeError);
+      await expect(store.create("rd-1", file, "{}", OPEN)).rejects.toThrow(RangeError);
+      await expect(store.read("rd-1", file, OPEN)).rejects.toThrow(RangeError);
+      await expect(store.removeFile("rd-1", file, OPEN)).rejects.toThrow(RangeError);
+    }
+    await expect(readdir(base)).resolves.toEqual([]);
+    expect(folderFilePath(root, "rd-1", "check.json")).toBe(join(root, "rd-1", "check.json"));
+    expect(() => folderFilePath(root, "..", "check.json")).toThrow(RangeError);
+  });
+
   it("throws for a stopped signal, and writes nothing", async () => {
     const stopped = AbortSignal.abort();
     await expect(store.write("rd-1", "machine.json", "{}", stopped)).rejects.toThrow("The signal stopped");
     await expect(store.folders(stopped)).rejects.toThrow("The signal stopped");
+    await expect(store.create("rd-1", "started", "{}", stopped)).rejects.toThrow("The signal stopped");
+    await expect(store.removeFile("rd-1", "started", stopped)).rejects.toThrow("The signal stopped");
     await expect(readdir(base)).resolves.toEqual([]);
   });
 
   it.skipIf(process.platform === "win32")("gives each file the mode 0o600 and each folder the mode 0o700", async () => {
     await store.write("rd-1", "configuration", "jit", OPEN);
+    await store.create("rd-1", "started", "{}", OPEN);
+    expect((await stat(join(root, "rd-1", "started"))).mode & 0o777).toBe(FILE_MODE);
     expect((await stat(join(root, "rd-1"))).mode & 0o777).toBe(FOLDER_MODE);
     expect((await stat(join(root, "rd-1", "configuration"))).mode & 0o777).toBe(FILE_MODE);
   });
