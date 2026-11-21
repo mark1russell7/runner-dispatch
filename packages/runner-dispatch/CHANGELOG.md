@@ -1,5 +1,9 @@
 # Changes
 
+## 0.1.4
+
+An automated dependency update changes the shipped files, so this PATCH ships them.
+
 ## 0.1.3
 
 - `summarizeMeasures` gives the summary `measure-summary/1` of the records of the machines and of the jobs.
