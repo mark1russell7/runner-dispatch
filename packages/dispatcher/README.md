@@ -2,7 +2,7 @@
 
 The dispatcher of `runner-dispatch`, declared as one service of `@mark1russell7/service`. The package is private, and it is not on npm.
 
-The package declares the service, and it has no program yet. The program comes with the first real source and the first real provider (items R4 and R5 of the roadmap).
+The package declares the service. The entry `src/program.ts` joins it with the source of GitHub and one provider: Proxmox VE or a store of folders.
 
 ## The declaration
 
@@ -99,15 +99,17 @@ The entry `src/program.ts` joins the parts into one program. A program is one do
 - The drain of each profile has a cap of 4 s. Thus the bound of a pass is less than 4 s, or `lint` finds it `violated`.
 - The field `stop` is the path of the stop file. When the file is there, the stop switch is on.
 - With an organization, the field `runnerGroup` is necessary. The field `github.url` has the default `https://api.github.com`.
+- The document has one provider: the field `proxmox` or the field `folder`. Refer to [the folder provider and the rounds](#the-folder-provider-and-the-rounds).
 - Each size of the settings has a template in `proxmox.sizes`. The field `proxmox.files` changes the two paths in the machine.
 - The field `probes` is optional. It starts a probe server of `@mark1russell7/service/http` on its port, with the default host `127.0.0.1`.
 
 The two secrets come from the environment: `RUNNER_DISPATCH_GITHUB_TOKEN` and `RUNNER_DISPATCH_PROXMOX_TOKEN`. `readSecrets` names a variable in a problem, but not its value.
+A program with the folder provider needs only `RUNNER_DISPATCH_GITHUB_TOKEN`.
 
 `prepareProgram` starts nothing. It does these steps:
 
 1. With an organization, it checks the runner group before the first pass. A group that admits a repository with no service, or a public repository, stops the program.
-2. It makes the client of GitHub, the client of Proxmox VE with its transport, the source and the provider.
+2. It makes the client of GitHub, the source and the provider: the client of Proxmox VE with its transport, or the store of the folders.
 3. It declares the service, and it examines the declaration with `lint` on a host with no platform of pods. A finding `violated` stops the program.
 
 `runProgram` then starts the service. The program writes JSON lines: the check of the runner group, the findings of `lint`, each pass that changes something and each failure. No line has a token or a one-job configuration.
@@ -127,11 +129,14 @@ export RUNNER_DISPATCH_GITHUB_TOKEN=...
 export RUNNER_DISPATCH_PROXMOX_TOKEN=...
 node src/bin.ts /etc/runner-dispatch/program.json --check
 node src/bin.ts /etc/runner-dispatch/program.json
+node src/bin.ts /etc/runner-dispatch/program.json --round
 ```
 
 - With `--check`, the command prepares the program and writes its log lines. It then writes the line `{"event":"checked"}` and stops before the first pass.
-- Without `--check`, the command starts the service. A `SIGTERM` or a `SIGINT` starts the shutdown of the service.
-- The exit code 0 is a stop with no error, or a check with no problem. The exit code 1 is a problem, and 2 is a bad command.
+- With `--round`, the command does one round of passes, then it stops. Refer to [the folder provider and the rounds](#the-folder-provider-and-the-rounds).
+- Without an option, the command starts the service. A `SIGTERM` or a `SIGINT` starts the shutdown of the service.
+- The exit code 0 is a stop with no error, a check with no problem or a settled round. The exit code 1 is a problem, and 2 is a bad command.
+- The exit code 3 is a round with no settled pass.
 - Each log line goes to stdout as one line of JSON. Each problem goes to stderr, with each problem of the document and of the tokens together.
 - The line `machine-measure` has the record of a machine at the end of its life, with its spans. The line `job-measure` has the record of a job at its end.
 
@@ -139,8 +144,40 @@ The command makes the ports of Node.js in `src/cli.ts`:
 
 - `restGitHubApi` puts the GitHub API of the dispatcher on the REST client of `@procedures/gh`. The client sends a conditional request for a stored answer, and it keeps the limits of the rate of GitHub.
 - The transport of `src/transport.ts` sends each exchange to Proxmox VE.
+- `nodeFolderStore` of `src/folders.ts` is the store of the folder provider.
 - `fileExists` examines the stop file. An error that is not `ENOENT` makes the pass fail, and the stop switch does not change.
 - Each line of each output goes through `redactSecrets` of `@mark1russell7/text/redact` with the two tokens. Thus an error text from a library also has no token.
+
+## The folder provider and the rounds
+
+A program with the field `folder` in place of the field `proxmox` uses the folder provider of `@mark1russell7/runner-dispatch/folder`:
+
+```json
+"folder": { "root": "/var/lib/runner-dispatch/folders" }
+```
+
+- `nodeFolderStore` of `src/folders.ts` keeps one folder for each machine in the root folder.
+- Each write goes through `writeFileAtomic` of `@procedures/fs/files`. A file gets the mode `0o600`, and a folder gets the mode `0o700`.
+- The store refuses each name that is not the name of a folder of a machine.
+- The program does not read `RUNNER_DISPATCH_PROXMOX_TOKEN`.
+
+A starter on the same host starts the runner of each folder. The README of `@mark1russell7/runner-dispatch` has the rules of the starter.
+The dispatcher and the starter share only the folders. Thus a job operates in a process with no token.
+
+With `--round`, the command does passes until a pass is settled, then it stops. A settled pass has these properties:
+
+- The pass read the stop switch, and the signal did not cut it.
+- The pass made no step, adopted no machine and sent no request. No request failed.
+- Each machine is in the state `asked`. It waits for its starter.
+
+Thus the next pass changes nothing until a different process acts. More about a round:
+
+- A round does at most `ROUND_PASSES` (30) passes. The sleep of the loop comes between two passes.
+- The line `{"event":"round"}` has the count of passes, the end and the count of failed passes. The end is `settled`, `bound` or `signal`.
+- A new round adopts each machine of the folders, because the memory of a round ends with its process.
+- A pass that adopts a machine is not settled. Thus a round after an earlier round does two passes, or more.
+
+Thus a CI job can do a round with the token in one step, and start the runners in a later step with no secret.
 
 ## The summary of the measures
 
@@ -274,5 +311,15 @@ Tests hold the command line:
 - A program on fakes makes a machine for a job, and a `SIGTERM` gives the exit code 0. No output has a token or a one-job configuration.
 - `restGitHubApi` sends the token, the user agent and the query, and it gives the stored answer for a 304.
 - `fileExists` gives `false` for a file that is not there, and it gives each other error to the caller.
+- A round with `--round` gives the exit code 0 when it is settled or at a `SIGTERM`, and 3 with no settled pass.
+- A round with the folder provider needs no token of Proxmox VE. No output has the one-job configuration.
+
+Tests hold the rounds and the folders:
+
+- A round with no job ends after one pass. For a queued job, the first pass writes a folder, and the second pass is settled.
+- A new round adopts the machine of an earlier round, and it makes no second machine.
+- The folder of a runner that exited goes away in the next round.
+- A round ends at its count of passes. A signal stops it before a pass or during a sleep.
+- `nodeFolderStore` writes, reads, lists and removes in a temporary folder. It refuses a bad name and a stopped signal.
 
 The shared fakes of the tests are in `src/fixtures.ts`.

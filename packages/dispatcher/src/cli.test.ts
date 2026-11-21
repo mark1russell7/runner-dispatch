@@ -2,12 +2,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GitHubApi } from "@mark1russell7/runner-dispatch/github";
-import { countingSuffix, fakeGitHubApi, fakeProxmox, fakeWorld } from "@mark1russell7/runner-dispatch/testing";
+import { countingSuffix, fakeFolders, fakeGitHubApi, fakeProxmox, fakeWorld, type FakeFolders, type FakeWorld } from "@mark1russell7/runner-dispatch/testing";
 import { fakeClock, fakeProcess } from "@mark1russell7/service/testing";
 import type { RestExchange, RestReply } from "@procedures/gh";
 import { describe, expect, it } from "vitest";
-import { fileExists, main, nodePorts, parseCommand, restGitHubApi, USAGE, USER_AGENT, type CliIo } from "./cli.ts";
+import { fileExists, main, nodePorts, parseCommand, restGitHubApi, ROUND_UNSETTLED, USAGE, USER_AGENT, type CliIo } from "./cli.ts";
 import { doc, GITHUB_TOKEN, groupApi, noProxmox, ORGANIZATION, PROXMOX_TOKEN, REPO, settle, wireOf } from "./fixtures.ts";
+import { ROUND_PASSES } from "./index.ts";
 import { GITHUB_API_URL, SECRET_VARIABLES, type ProgramPorts } from "./program.ts";
 
 const ENV = { [SECRET_VARIABLES.github]: GITHUB_TOKEN, [SECRET_VARIABLES.proxmox]: PROXMOX_TOKEN };
@@ -46,9 +47,10 @@ const SECRET_TEXTS = [GITHUB_TOKEN, PROXMOX_TOKEN, "0123-secret-of-proxmox"];
 
 describe("parseCommand", () => {
   it.each([
-    [["program.json"], { kind: "run", path: "program.json", check: false }],
-    [["--check", "program.json"], { kind: "run", path: "program.json", check: true }],
-    [["program.json", "--check"], { kind: "run", path: "program.json", check: true }],
+    [["program.json"], { kind: "run", path: "program.json", mode: "service" }],
+    [["--check", "program.json"], { kind: "run", path: "program.json", mode: "check" }],
+    [["program.json", "--check"], { kind: "run", path: "program.json", mode: "check" }],
+    [["program.json", "--round"], { kind: "run", path: "program.json", mode: "round" }],
     [["-h"], { kind: "help" }],
     [["program.json", "--bad", "--help"], { kind: "help" }],
   ])("reads %j", (args, command) => {
@@ -60,6 +62,9 @@ describe("parseCommand", () => {
     [["--check"], "The command has no path of a program."],
     [["a.json", "b.json"], "The command takes one path of a program."],
     [["a.json", "--check", "--check"], "The option --check is in the command two times."],
+    [["a.json", "--round", "--round"], "The option --round is in the command two times."],
+    [["a.json", "--check", "--round"], "The command takes the option --check or the option --round, not the two."],
+    [["a.json", "--round", "--check"], "The command takes the option --check or the option --round, not the two."],
     [["a.json", "--dry-run"], "The option --dry-run is not an option of the command."],
   ])("refuses %j", (args, problem) => {
     expect(parseCommand(args)).toEqual({ kind: "usage", problem });
@@ -177,6 +182,96 @@ describe("main", () => {
     expect(events[0]).toBe("declaration");
     expect(events).toContain("pass");
     for (const secret of [...SECRET_TEXTS, ...world.secrets()]) expect(at.out.join("\n")).not.toContain(secret);
+  });
+});
+
+describe("main --round", () => {
+  const FOLDER_DOC = JSON.stringify(doc({ proxmox: undefined, folder: { root: "/run/runner-dispatch/folders" } }));
+  const GITHUB_ONLY = { [SECRET_VARIABLES.github]: GITHUB_TOKEN };
+
+  /** This function starts a round on fakes, and moves the clock until the command ends. */
+  const roundOn = async (setUp: (world: FakeWorld, folders: FakeFolders) => void = () => {}) => {
+    const clock = fakeClock(0);
+    const world = fakeWorld({ clock, times: { boot: 2000, connect: 1000, destroy: 500 } });
+    const folders = fakeFolders();
+    const process = fakeProcess({ clock });
+    setUp(world, folders);
+    const at = memoryIo({ [FILE]: FOLDER_DOC }, GITHUB_ONLY);
+    let code: number | null = null;
+    const ended = main([FILE, "--round"], at.io, {
+      github: () => fakeGitHubApi(world).api as GitHubApi<AbortSignal>,
+      proxmox: () => {
+        throw new Error("A program with the folder provider makes no transport of Proxmox VE.");
+      },
+      folders: () => folders.store,
+      exists: () => Promise.resolve(false),
+      clock,
+      process,
+      suffix: countingSuffix(),
+    }).then((exit) => {
+      code = exit;
+    });
+    const drive = async (steps: number): Promise<void> => {
+      for (let step = 0; step < steps && code === null; step += 1) {
+        await settle();
+        await clock.advance(1000);
+      }
+    };
+    return { at, world, folders, process, ended, drive, code: () => code };
+  };
+
+  /** This function gives the result of the line round of the log. */
+  const resultOf = (out: readonly string[]): unknown => (out.map((line) => JSON.parse(line) as { event: string; result?: unknown }).find((line) => line.event === "round") ?? {}).result;
+
+  it("does one pass with no job, logs a settled round, and gives the exit code 0, with no token of Proxmox VE", async () => {
+    const run = await roundOn();
+    await run.drive(20);
+    await run.ended;
+    expect(run.code()).toBe(0);
+    expect(run.at.err).toEqual([]);
+    expect(resultOf(run.at.out)).toEqual({ passes: 1, end: "settled", failures: 0 });
+    expect(run.folders.changes()).toEqual([]);
+  });
+
+  it("writes the folder of a machine for a queued job, then settles on the next pass, and no log line has the configuration", async () => {
+    const run = await roundOn((world) =>
+      world.addRun(
+        { repository: REPO, runId: 100, runAttempt: 1, event: "push", headRepository: REPO, actor: "octo", triggeringActor: "octo" },
+        [{ labels: ["run-100-1"], duration: 4000 }],
+      ),
+    );
+    await run.drive(40);
+    await run.ended;
+    expect(run.code()).toBe(0);
+    expect(resultOf(run.at.out)).toEqual({ passes: 2, end: "settled", failures: 0 });
+    const tree = run.folders.tree();
+    expect(tree.size).toBe(1);
+    const files = [...tree.values()][0];
+    expect([...(files?.keys() ?? [])].sort()).toEqual(["check.json", "configuration", "machine.json"]);
+    const secrets = run.world.secrets();
+    expect(secrets.length).toBe(1);
+    expect(files?.get("configuration")).toContain(secrets[0] ?? "-");
+    for (const secret of [...SECRET_TEXTS, ...secrets]) expect(run.at.out.join("\n")).not.toContain(secret);
+  });
+
+  it(`gives the exit code ${ROUND_UNSETTLED} when no pass of the round is settled`, async () => {
+    const run = await roundOn((_, folders) => folders.fail("folders"));
+    await run.drive(ROUND_PASSES * 10);
+    await run.ended;
+    expect(run.code()).toBe(ROUND_UNSETTLED);
+    expect(resultOf(run.at.out)).toEqual({ passes: ROUND_PASSES, end: "bound", failures: ROUND_PASSES });
+  });
+
+  it("stops the round at a SIGTERM, with the exit code 0", async () => {
+    const run = await roundOn((_, folders) => folders.fail("folders"));
+    await run.drive(3);
+    run.process.signal("SIGTERM");
+    await run.drive(20);
+    await run.ended;
+    expect(run.code()).toBe(0);
+    const result = resultOf(run.at.out) as { end: string; passes: number };
+    expect(result.end).toBe("signal");
+    expect(result.passes).toBeLessThan(ROUND_PASSES);
   });
 });
 

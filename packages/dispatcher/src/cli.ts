@@ -1,8 +1,9 @@
 /**
- * The command line of the dispatcher: `runner-dispatch <program.json> [--check]`.
+ * The command line of the dispatcher: `runner-dispatch <program.json> [--check | --round]`.
  *
- * The command reads the document of a program and the two tokens, and it makes the ports of Node.js.
- * These are the REST client of `@procedures/gh` for GitHub, the transport of `src/transport.ts` for Proxmox VE, and the stop file.
+ * The command reads the document of a program and its tokens, and it makes the ports of Node.js.
+ * These are the REST client of `@procedures/gh` for GitHub and the transport of `src/transport.ts` for Proxmox VE.
+ * The other ports are the store of the folders of `src/folders.ts` and the stop file.
  * Each log line goes to stdout as one line of JSON. Each problem goes to stderr. Each line goes through `redactSecrets`
  * of `@mark1russell7/text/redact` with the two tokens, thus no output has a token.
  */
@@ -10,6 +11,9 @@ import { access, readFile } from "node:fs/promises";
 import type { GitHubApi } from "@mark1russell7/runner-dispatch/github";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { createRestClient, type RestClientOptions } from "@procedures/gh";
+import { nodeProcess } from "@mark1russell7/service";
+import { nodeFolderStore } from "./folders.ts";
+import { round, ROUND_PASSES } from "./index.ts";
 import { parseProgram, prepareProgram, readSecrets, runProgram, SECRET_VARIABLES, type LogLine, type ProgramPorts } from "./program.ts";
 import { proxmoxTransport } from "./transport.ts";
 
@@ -18,20 +22,26 @@ export const USER_AGENT = "runner-dispatch";
 
 /** This text tells how to use the command. */
 export const USAGE: string = [
-  "Usage: runner-dispatch <program.json> [--check]",
+  "Usage: runner-dispatch <program.json> [--check | --round]",
   "",
   "  <program.json>  The document dispatcher-program/1 of the program",
   "  --check         Prepare the program, write its log lines, and stop before the first pass",
+  `  --round         Do passes until a pass is settled, at most ${ROUND_PASSES}, then stop`,
   "  -h, --help      This text",
   "",
   `The tokens come from the variables ${SECRET_VARIABLES.github} and ${SECRET_VARIABLES.proxmox}.`,
+  `A program with the folder provider needs only ${SECRET_VARIABLES.github}.`,
   "Each log line goes to stdout as one line of JSON. Problems go to stderr. No output has a token.",
-  "Exit codes: 0 a stop with no error or a check with no problem, 1 a problem, 2 a bad command.",
+  "Exit codes: 0 a stop with no error, a check with no problem or a settled round, 1 a problem, 2 a bad command,",
+  "3 a round with no settled pass.",
 ].join("\n");
 
-/** This record is a command: a run or a check of a program, the help, or a bad command with its problem. */
+/** This type tells how the command operates a program: as a service, a check with no pass, or one round of passes. */
+export type RunMode = "service" | "check" | "round";
+
+/** This record is a command: a run of a program, the help, or a bad command with its problem. */
 export type Command =
-  | { readonly kind: "run"; readonly path: string; readonly check: boolean }
+  | { readonly kind: "run"; readonly path: string; readonly mode: RunMode }
   | { readonly kind: "help" }
   | { readonly kind: "usage"; readonly problem: string };
 
@@ -45,11 +55,13 @@ export type Command =
 export function parseCommand(args: readonly string[]): Command {
   if (args.includes("-h") || args.includes("--help")) return { kind: "help" };
   let path: string | null = null;
-  let check = false;
+  let mode: RunMode = "service";
   for (const arg of args) {
-    if (arg === "--check") {
-      if (check) return { kind: "usage", problem: "The option --check is in the command two times." };
-      check = true;
+    if (arg === "--check" || arg === "--round") {
+      const next: RunMode = arg === "--check" ? "check" : "round";
+      if (mode === next) return { kind: "usage", problem: `The option ${arg} is in the command two times.` };
+      if (mode !== "service") return { kind: "usage", problem: "The command takes the option --check or the option --round, not the two." };
+      mode = next;
     } else if (arg.startsWith("-")) {
       return { kind: "usage", problem: `The option ${arg} is not an option of the command.` };
     } else if (path === null) {
@@ -58,7 +70,7 @@ export function parseCommand(args: readonly string[]): Command {
       return { kind: "usage", problem: "The command takes one path of a program." };
     }
   }
-  return path === null ? { kind: "usage", problem: "The command has no path of a program." } : { kind: "run", path, check };
+  return path === null ? { kind: "usage", problem: "The command has no path of a program." } : { kind: "run", path, mode };
 }
 
 /** This record has the parts of Node.js that the command uses: the environment, the program file and the two outputs. */
@@ -133,6 +145,7 @@ export function nodePorts(write: (line: string) => void, over: Partial<ProgramPo
   return {
     github: ({ url, token }) => restGitHubApi({ token, baseUrl: url, userAgent: USER_AGENT }),
     proxmox: proxmoxTransport,
+    folders: (root) => nodeFolderStore(root),
     exists: fileExists,
     log: (line: LogLine) => write(JSON.stringify(line)),
     ...over,
@@ -151,14 +164,25 @@ const tokensOf = (env: Readonly<Record<string, string | undefined>>): string[] =
 /** This function gives the text of an error for a problem. */
 const textOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/** This constant is the exit code of a round that ends with no settled pass. */
+export const ROUND_UNSETTLED = 3;
+
+/** This function tells if a document names the Proxmox provider. Thus the command reads the token of Proxmox VE only for it. */
+const namesProxmox = (value: unknown): boolean =>
+  typeof value === "object" && value !== null && !Array.isArray(value) && (value as Readonly<Record<string, unknown>>)["proxmox"] !== undefined;
+
 /**
- * This function is the command. It reads the program and the two tokens, and it prepares the program.
- * With `--check`, it stops after the preparation. Else it starts the service, and it waits for its exit.
+ * This function is the command. It reads the program and its tokens, and it prepares the program.
+ *
+ * - With `--check`, it stops after the preparation.
+ * - With `--round`, it does passes until a pass is settled, at most `ROUND_PASSES`. A signal SIGINT or SIGTERM stops the round.
+ * - Else it starts the service, and it waits for its exit.
  *
  * @param args - The arguments after the name of the command
  * @param io - The environment, the program file and the two outputs
  * @param over - The ports that replace the ports of Node.js, for a test
- * @returns The exit code: 0 for a stop with no error or a check with no problem, 1 for a problem, 2 for a bad command
+ * @returns The exit code. The code 0 is a stop with no error, a check with no problem or a settled round.
+ * The code 1 is a problem, 2 is a bad command, and `ROUND_UNSETTLED` is a round with no settled pass.
  */
 export async function main(args: readonly string[], io: CliIo, over: Partial<ProgramPorts> = {}): Promise<number> {
   const tokens = tokensOf(io.env);
@@ -190,7 +214,7 @@ export async function main(args: readonly string[], io: CliIo, over: Partial<Pro
     return 1;
   }
   const program = parseProgram(value);
-  const secrets = readSecrets(io.env);
+  const secrets = readSecrets(io.env, { proxmox: namesProxmox(value) });
   if (!program.ok || !secrets.ok) {
     for (const problem of [...(program.ok ? [] : program.problems), ...(secrets.ok ? [] : secrets.problems)]) err(problem);
     return 1;
@@ -202,9 +226,21 @@ export async function main(args: readonly string[], io: CliIo, over: Partial<Pro
       for (const problem of prepared.problems) err(problem);
       return 1;
     }
-    if (command.check) {
+    if (command.mode === "check") {
       out(JSON.stringify({ event: "checked" }));
       return 0;
+    }
+    if (command.mode === "round") {
+      const stop = new AbortController();
+      const host = ports.process ?? nodeProcess;
+      const offs = (["SIGINT", "SIGTERM"] as const).map((trigger) => host.on(trigger, () => stop.abort()));
+      try {
+        const result = await round({ ...prepared.value.parts, passes: ROUND_PASSES, sleep: program.value.loop.sleep }, stop.signal);
+        ports.log({ event: "round", result });
+        return result.end === "bound" ? ROUND_UNSETTLED : 0;
+      } finally {
+        for (const off of offs) off();
+      }
     }
     const life = await runProgram(prepared.value, ports);
     return await life.done;

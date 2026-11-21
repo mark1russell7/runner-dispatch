@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@runner-dispatch/dispatcher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -14,9 +14,11 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
   },
   "dependencies": {
+    "@mark1russell7/algebra": "^0.8.10",
     "@mark1russell7/runner-dispatch": "workspace:*",
     "@mark1russell7/service": "^0.8.6",
     "@mark1russell7/text": "^0.0.17",
+    "@procedures/fs": "^0.68.0",
     "@procedures/gh": "^0.55.1",
     "@procedures/http": "^0.55.0"
   },
