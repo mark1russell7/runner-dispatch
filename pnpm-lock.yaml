@@ -177,13 +177,13 @@ importers:
     devDependencies:
       '@mark1russell7/api-report':
         specifier: ^0.5.3
-        version: 0.5.17
+        version: 0.5.18
       '@mark1russell7/boundaries':
         specifier: ^0.3.0
         version: 0.3.2(@swc/core@1.16.22)(dependency-cruiser@18.8.0)
       '@mark1russell7/conventions':
-        specifier: ^0.49.0
-        version: 0.49.0
+        specifier: ^0.50.4
+        version: 0.50.4
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
@@ -547,8 +547,8 @@ packages:
       zod:
         optional: true
 
-  '@mark1russell7/api-report@0.5.17':
-    resolution: {integrity: sha512-IkW+OhbuAtPpQR8gBXAasEYRF6eeDUVJakn7xbeF9ZN7Sr16fKHM09GX/bfpLYpImwSwXF8OVWg1ThJsKOEZSg==}
+  '@mark1russell7/api-report@0.5.18':
+    resolution: {integrity: sha512-iDfFuVuhWP3597ic1Yx93cin1f9o2bP2McRfnFlb8xHh4jUza0PsunTTQPlXei103JjeMEMz3kwqbPcYsySzNw==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -582,8 +582,8 @@ packages:
     resolution: {integrity: sha512-KKAYIACji5XtOpbE3fIX4D3aVd0oddyM9dU+Pk+lXpgYOh6VTVoa/0yzwDTipZ42RKp+6BG+LSkLjCe/FjCHFA==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/conventions@0.49.0':
-    resolution: {integrity: sha512-nSuJfGKy8ATorRwPbSa7jywQeRFI+9DzDqE3Pd0N/kXIRXTFjzuRcAajcGyTyjjP3wm8eyVL3ItHG3yZt/v/eA==}
+  '@mark1russell7/conventions@0.50.4':
+    resolution: {integrity: sha512-RjRBOrWE0x87qSv8rqU0NiL+PTHTJPlyh87iONsPxHde1+ECutguWvho+p+6AnqOBF8Oai1roHwF9ELm3j3pkw==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -2062,9 +2062,9 @@ snapshots:
     optionalDependencies:
       zod: 4.6.7
 
-  '@mark1russell7/api-report@0.5.17':
+  '@mark1russell7/api-report@0.5.18':
     dependencies:
-      '@mark1russell7/conventions': 0.49.0
+      '@mark1russell7/conventions': 0.50.4
 
   '@mark1russell7/boundaries@0.3.2(@swc/core@1.16.22)(dependency-cruiser@18.8.0)':
     optionalDependencies:
@@ -2109,7 +2109,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/conventions@0.49.0':
+  '@mark1russell7/conventions@0.50.4':
     dependencies:
       '@mark1russell7/text': 0.0.17
       yaml: 2.9.1
