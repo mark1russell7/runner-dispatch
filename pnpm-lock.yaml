@@ -183,13 +183,13 @@ importers:
         version: 0.3.2(@swc/core@1.16.22)(dependency-cruiser@18.8.0)
       '@mark1russell7/conventions':
         specifier: ^0.50.4
-        version: 0.50.7
+        version: 0.50.12
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
       '@mark1russell7/ste-lint':
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.5.0
+        version: 0.5.0
       '@mark1russell7/template-cli':
         specifier: ^0.1.7
         version: 0.1.9
@@ -306,7 +306,7 @@ importers:
         version: 2.1.4
       '@mark1russell7/site-pages':
         specifier: ^0.8.0
-        version: 0.8.2
+        version: 0.8.3
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.6
@@ -582,8 +582,8 @@ packages:
     resolution: {integrity: sha512-KKAYIACji5XtOpbE3fIX4D3aVd0oddyM9dU+Pk+lXpgYOh6VTVoa/0yzwDTipZ42RKp+6BG+LSkLjCe/FjCHFA==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/conventions@0.50.7':
-    resolution: {integrity: sha512-1tx4G5JETCH+sccyKiNXi9rVviMEnFJS3RNpPnwI5/3Cp2DFKkyGZCKJpEh+uXJ5BSli5NrgWAV0lWTOnKWHSQ==}
+  '@mark1russell7/conventions@0.50.12':
+    resolution: {integrity: sha512-dpwW6MiAhfIo83z2HHidTEzaSQ5dRK2VOO2LySgYZ7cD5XyGdcsGlfgX1muf+w5egi+KzPzIOtseNetmoAKy6A==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -598,6 +598,10 @@ packages:
 
   '@mark1russell7/files@0.0.4':
     resolution: {integrity: sha512-Pb978ZnvlAxzcdWtRtqTGb7mZFCvlNrdKnpZqhxQ7gafzeNGf1JqYFuB4RWiLbJzRuFUWjEoAVG5f2TndCIlSg==}
+    engines: {node: '>=22'}
+
+  '@mark1russell7/files@0.0.5':
+    resolution: {integrity: sha512-2p3FGGlLJiHdPE3JFl41CjrS7nkewLbb0QKKhWLHEpjWHP1KT60IKSb7hP8kcF++Yof0XW6wwctQDnQ3p8jZeg==}
     engines: {node: '>=22'}
 
   '@mark1russell7/optional@1.2.0':
@@ -718,13 +722,13 @@ packages:
       zod:
         optional: true
 
-  '@mark1russell7/site-pages@0.8.2':
-    resolution: {integrity: sha512-WMErq1NBREuaBOn28Vg+7LMJSTou8+O27qNRoaRt11h+r3j9muf4jFmuwGazDOSS+Cf32gxDT1/IpXbAz2h/Vg==}
+  '@mark1russell7/site-pages@0.8.3':
+    resolution: {integrity: sha512-ZYjdSgnBbBZBLtZ6J7Qs5WZYFNMswKT/SdGi8wHX6v69WvmOxr0F9fn1HuDNFrSoxFbE2h/jibfjjgJ84iQ9Rg==}
     engines: {node: '>=22'}
     hasBin: true
 
-  '@mark1russell7/ste-lint@0.4.0':
-    resolution: {integrity: sha512-V58Mtpt7WOW2wRBreSuuIO4am0WOdrJq8603+NNtqyI5EY0/LpPiQFxEDx+yNOgkN5ddnpPTkjalRTmBF+9GXQ==}
+  '@mark1russell7/ste-lint@0.5.0':
+    resolution: {integrity: sha512-FQ+fDY4qRnOXkjBWJn0pkDKHgrVE0acsgHvrW0fenvd4awpJqooDLsam65K3t7WGs+r7lkDBk3SGlNgSLDi21g==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -2064,7 +2068,7 @@ snapshots:
 
   '@mark1russell7/api-report@0.5.18':
     dependencies:
-      '@mark1russell7/conventions': 0.50.7
+      '@mark1russell7/conventions': 0.50.12
 
   '@mark1russell7/boundaries@0.3.2(@swc/core@1.16.22)(dependency-cruiser@18.8.0)':
     optionalDependencies:
@@ -2109,7 +2113,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/conventions@0.50.7':
+  '@mark1russell7/conventions@0.50.12':
     dependencies:
       '@mark1russell7/text': 0.0.17
       yaml: 2.9.1
@@ -2119,6 +2123,8 @@ snapshots:
   '@mark1russell7/files@0.0.3': {}
 
   '@mark1russell7/files@0.0.4': {}
+
+  '@mark1russell7/files@0.0.5': {}
 
   '@mark1russell7/optional@1.2.0': {}
 
@@ -2185,13 +2191,13 @@ snapshots:
       ws: 8.22.2
       zod: 4.6.7
 
-  '@mark1russell7/site-pages@0.8.2':
+  '@mark1russell7/site-pages@0.8.3':
     dependencies:
       '@mark1russell7/rigor-statistics': 0.2.8
 
-  '@mark1russell7/ste-lint@0.4.0':
+  '@mark1russell7/ste-lint@0.5.0':
     dependencies:
-      '@mark1russell7/files': 0.0.4
+      '@mark1russell7/files': 0.0.5
       typescript: 6.0.3
 
   '@mark1russell7/template-cli@0.1.9':
