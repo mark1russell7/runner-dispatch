@@ -18,7 +18,7 @@
     "@mark1russell7/algebra": "^0.8.10",
     "@mark1russell7/runner-dispatch": "workspace:*",
     "@mark1russell7/service": "^0.8.6",
-    "@mark1russell7/text": "^0.0.17",
+    "@mark1russell7/text": "^0.0.18",
     "@procedures/fs": "^0.68.0",
     "@procedures/gh": "^0.55.1",
     "@procedures/http": "^0.55.0"
