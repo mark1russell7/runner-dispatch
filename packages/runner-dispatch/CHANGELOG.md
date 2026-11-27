@@ -1,5 +1,9 @@
 # Changes
 
+## 0.1.5
+
+An automated dependency update changes the shipped files, so this PATCH ships them.
+
 ## 0.1.4
 
 - The new entry `@mark1russell7/runner-dispatch/folder` has the folder provider. Each machine is one folder of a store, with the name of the machine.
